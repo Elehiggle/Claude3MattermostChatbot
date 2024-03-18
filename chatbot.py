@@ -5,9 +5,11 @@ import ssl
 import certifi
 import traceback
 import json
+import os
 import threading
 import re
 import datetime
+import logging
 from bs4 import BeautifulSoup
 from anthropic import Anthropic
 import concurrent.futures
@@ -15,6 +17,9 @@ import base64
 import httpx
 from io import BytesIO
 from PIL import Image
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # save the original create_default_context function so we can call it later
 create_default_context_orig = ssl.create_default_context
@@ -31,15 +36,12 @@ def cdc(*args, **kwargs):
 ssl.create_default_context = cdc
 
 # Anthropic API key and model
-api_key = "YOUR_API_KEY_HERE"
-model = "claude-3-opus-20240229"
+api_key = os.environ["ANTHROPIC_API_KEY"]
+model = os.environ["ANTHROPIC_MODEL"]
 
 # Mattermost server details
-mattermost_url = "mattermostinstance.example.com"
-mattermost_personal_access_token = "YOUR_TOKEN_HERE"
-
-# Chatbot account username
-chatbot_account = "@chatbot"
+mattermost_url = os.environ["MATTERMOST_URL"]
+mattermost_personal_access_token = os.environ["MATTERMOST_TOKEN"]
 
 # Maximum website size
 max_response_size = 1024 * 1024 * 100  # 100 MB
@@ -59,6 +61,10 @@ driver = Driver({
     'verify': True
 })
 
+# Chatbot account username, automatically fetched
+chatbot_username = ""
+chatbot_usernameAt = ""
+
 # Create an Anthropic client instance
 anthropic_client = Anthropic(api_key=api_key)
 
@@ -68,7 +74,7 @@ thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
 def get_system_instructions():
     current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    return f"You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_account}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question."
+    return f"You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question."
 
 
 def sanitize_username(username):
@@ -84,7 +90,7 @@ def get_username_from_user_id(user_id):
         user = driver.users.get_user(user_id)
         return sanitize_username(user["username"])
     except Exception as e:
-        print(f"Error retrieving username for user ID {user_id}: {str(e)} {traceback.format_exc()}")
+        logger.error(f"Error retrieving username for user ID {user_id}: {str(e)} {traceback.format_exc()}")
         return f"Unknown_{user_id}"
 
 
@@ -120,7 +126,7 @@ def send_typing_indicator_loop(user_id, channel_id, stop_event):
             send_typing_indicator(user_id, channel_id)
             time.sleep(2)
         except Exception as e:
-            print(f"Error sending busy indicator: {str(e)} {traceback.format_exc()}")
+            logging.error(f"Error sending busy indicator: {str(e)} {traceback.format_exc()}")
 
 
 def handle_typing_indicator(user_id, channel_id):
@@ -135,7 +141,7 @@ def process_message(messages, channel_id, root_id, sender_name):
     stop_typing_event = None
     typing_indicator_thread = None
     try:
-        print("Querying Anthropic API")
+        logger.info("Querying Anthropic API")
 
         # Start the typing indicator
         stop_typing_event, typing_indicator_thread = handle_typing_indicator(driver.client.userid, channel_id)
@@ -151,7 +157,7 @@ def process_message(messages, channel_id, root_id, sender_name):
                 temperature=temperature
             )
         except anthropic.APITimeoutError:
-            print("Anthropic API call timed out after 2 minutes")
+            logging.warn("Anthropic API call timed out after 2 minutes")
             response_text = "Sorry, the API call took too long to respond."
         else:
             # Extract the text content from the ContentBlock object
@@ -172,7 +178,7 @@ def process_message(messages, channel_id, root_id, sender_name):
         })
 
     except Exception as e:
-        print(f"Error processing message: {str(e)} {traceback.format_exc()}")
+        logging.error(f"Error processing message: {str(e)} {traceback.format_exc()}")
     finally:
         if stop_typing_event is not None:
             stop_typing_event.set()
@@ -182,15 +188,15 @@ def process_message(messages, channel_id, root_id, sender_name):
 async def message_handler(event):
     try:
         event_data = json.loads(event)
-        print(f"Received event: {event_data}")
+        logging.info(f"Received event: {event_data}")
         if event_data.get("event") == "hello":
-            print("Received 'hello' event. WebSocket connection established.")
+            logging.info("Received 'hello' event. WebSocket connection established.")
         elif event_data.get("event") == "posted":
             post = json.loads(event_data["data"]["post"])
             sender_id = post["user_id"]
-            if sender_id != driver.client.userid and sender_id != "YOUR_OTHER_CHATBOTS_SENDER_ID":  # You can ignore this or remove it, we have multiple chatbots and don't want them to answer each other in a loop
+            if sender_id != driver.client.userid and sender_id != "agrnjtruxjycign4wbimup8dua":  # You can ignore this or remove it, we have multiple chatbots and don't want them to answer each other in a loop
                 # Remove the "@chatbot" mention from the message
-                message = post["message"].replace(chatbot_account, "").strip()
+                message = post["message"].replace(chatbot_usernameAt, "").strip()
                 channel_id = post["channel_id"]
                 sender_name = sanitize_username(event_data["data"]["sender_name"])
                 root_id = post["root_id"]  # Get the root_id of the thread
@@ -227,7 +233,7 @@ async def message_handler(event):
                         root_id = post["id"]
 
                     # Add the current message to the messages array if "@chatbot" is mentioned, the chatbot has already been invoked in the thread or its a DM
-                    if chatbot_account in post["message"] or chatbot_invoked or channel_display_name.startswith("@"):
+                    if chatbot_usernameAt in post["message"] or chatbot_invoked or channel_display_name.startswith("@"):
                         links = re.findall(r'(https?://\S+)', message)  # Allow both http and https links
                         extracted_text = ""
                         total_size = 0
@@ -236,14 +242,14 @@ async def message_handler(event):
                         with httpx.Client() as client:
                             for link in links:
                                 if re.search(regex_local_links, link):
-                                    print(f"Skipping local URL: {link}")
+                                    logging.info(f"Skipping local URL: {link}")
                                     continue
                                 try:
                                     with client.stream("GET", link, timeout=4, follow_redirects=True) as response:
                                         final_url = str(response.url)
 
                                         if re.search(regex_local_links, final_url):
-                                            print(f"Skipping local URL after redirection: {final_url}")
+                                            logging.info(f"Skipping local URL after redirection: {final_url}")
                                             continue
 
                                         content_type = response.headers.get('content-type', '').lower()
@@ -329,7 +335,7 @@ async def message_handler(event):
                                             soup = BeautifulSoup(content, 'html.parser')
                                             extracted_text += soup.get_text()
                                 except Exception as e:
-                                    print(f"Error extracting content from link {link}: {str(e)} {traceback.format_exc()}")
+                                    logging.error(f"Error extracting content from link {link}: {str(e)} {traceback.format_exc()}")
 
                         content = f"[CONTEXT, from:{sender_name}"
                         if extracted_text != "":
@@ -363,18 +369,20 @@ async def message_handler(event):
                         thread_pool.submit(process_message, messages, channel_id, root_id, sender_name)
 
                 except Exception as e:
-                    print(f"Error inner message handler: {str(e)} {traceback.format_exc()}")
+                    logging.error(f"Error inner message handler: {str(e)} {traceback.format_exc()}")
         else:
             # Handle other events
             pass
     except json.JSONDecodeError:
-        print(f"Failed to parse event as JSON: {event} {traceback.format_exc()}")
+        logging.error(f"Failed to parse event as JSON: {event} {traceback.format_exc()}")
     except Exception as e:
-        print(f"Error message_handler: {str(e)} {traceback.format_exc()}")
+        logging.error(f"Error message_handler: {str(e)} {traceback.format_exc()}")
 
 try:
     # Log in to the Mattermost server
     driver.login()
+    chatbot_username = driver.client.username
+    chatbot_usernameAt = f"@{chatbot_username}"
 
     # Initialize the WebSocket connection
     while True:
@@ -382,8 +390,8 @@ try:
             # Initialize the WebSocket connection
             driver.init_websocket(message_handler)
         except Exception as e:
-            print(f"Error initializing WebSocket: {str(e)} {traceback.format_exc()}")
+            logging.error(f"Error initializing WebSocket: {str(e)} {traceback.format_exc()}")
         time.sleep(2)
 
 except Exception as e:
-    print(f"Error: {str(e)} {traceback.format_exc()}")
+    logging.error(f"Error: {str(e)} {traceback.format_exc()}")
