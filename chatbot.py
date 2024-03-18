@@ -1,6 +1,6 @@
 import time
 import anthropic
-from mattermostdriver import Driver
+from mattermostdriver.driver import Driver
 import ssl
 import certifi
 import traceback
@@ -42,11 +42,17 @@ model = os.environ["ANTHROPIC_MODEL"]
 # Mattermost server details
 mattermost_url = os.environ["MATTERMOST_URL"]
 mattermost_personal_access_token = os.environ["MATTERMOST_TOKEN"]
+mattermost_ignore_sender_id = os.environ["MATTERMOST_IGNORE_SENDER_ID"]
+mattermost_username = os.environ["MATTERMOST_USERNAME"]
+mattermost_password = os.environ["MATTERMOST_PASSWORD"]
+mattermost_mfa_token = os.environ["MATTERMOST_MFA_TOKEN"]
 
 # Maximum website size
-max_response_size = 1024 * 1024 * 100  # 100 MB
-max_tokens = 4096
-temperature = 0.0
+max_response_size = 1024 * 1024 * int(os.environ["MAX_RESPONSE_SIZE_MB"])
+
+# Model parameters
+max_tokens = int(os.environ["MAX_TOKENS"])
+temperature = float(os.environ["TEMPERATURE"])
 
 # For filtering local links
 regex_local_links = r'(?:127\.|192\.168\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|::1|[fF][cCdD]|localhost)'
@@ -55,6 +61,9 @@ regex_local_links = r'(?:127\.|192\.168\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.
 driver = Driver({
     'url': mattermost_url,
     'token': mattermost_personal_access_token,
+    'login_id': mattermost_username,
+    'password': mattermost_password,
+    'mfa_token': mattermost_mfa_token,
     'scheme': 'https',
     'port': 443,
     'basepath': '/api/v4',
@@ -73,7 +82,7 @@ thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
 
 def get_system_instructions():
-    current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     return f"You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. Answer concisely without much bla bla. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question."
 
 
@@ -137,7 +146,7 @@ def handle_typing_indicator(user_id, channel_id):
     return stop_typing_event, typing_indicator_thread
 
 
-def process_message(messages, channel_id, root_id, sender_name):
+def process_message(messages, channel_id, root_id, sender_name, links):
     stop_typing_event = None
     typing_indicator_thread = None
     try:
@@ -157,7 +166,7 @@ def process_message(messages, channel_id, root_id, sender_name):
                 temperature=temperature
             )
         except anthropic.APITimeoutError:
-            logging.warn("Anthropic API call timed out after 2 minutes")
+            logging.warning("Anthropic API call timed out after 2 minutes")
             response_text = "Sorry, the API call took too long to respond."
         else:
             # Extract the text content from the ContentBlock object
@@ -169,6 +178,11 @@ def process_message(messages, channel_id, root_id, sender_name):
 
             # Failsafe: Remove all blocks containing [CONTEXT
             response_text = re.sub(r'(?s)\[CONTEXT.*?]', '', response_text).strip()
+
+            # Failsafe: Remove all input links from the response
+            for link in links:
+                response_text = response_text.replace(link, '')
+            response_text = response_text.strip()
 
         # Send the API response back to the Mattermost channel as a reply to the thread or as a new thread
         driver.posts.create_post({
@@ -194,7 +208,7 @@ async def message_handler(event):
         elif event_data.get("event") == "posted":
             post = json.loads(event_data["data"]["post"])
             sender_id = post["user_id"]
-            if sender_id != driver.client.userid and sender_id != "agrnjtruxjycign4wbimup8dua":  # You can ignore this or remove it, we have multiple chatbots and don't want them to answer each other in a loop
+            if sender_id != driver.client.userid and sender_id != mattermost_ignore_sender_id:
                 # Remove the "@chatbot" mention from the message
                 message = post["message"].replace(chatbot_usernameAt, "").strip()
                 channel_id = post["channel_id"]
@@ -366,7 +380,7 @@ async def message_handler(event):
                         messages = ensure_alternating_roles(messages)
 
                         # Submit the task to the thread pool. We do this because Mattermostdriver-async is outdated
-                        thread_pool.submit(process_message, messages, channel_id, root_id, sender_name)
+                        thread_pool.submit(process_message, messages, channel_id, root_id, sender_name, links)
 
                 except Exception as e:
                     logging.error(f"Error inner message handler: {str(e)} {traceback.format_exc()}")
@@ -378,20 +392,30 @@ async def message_handler(event):
     except Exception as e:
         logging.error(f"Error message_handler: {str(e)} {traceback.format_exc()}")
 
-try:
-    # Log in to the Mattermost server
-    driver.login()
-    chatbot_username = driver.client.username
-    chatbot_usernameAt = f"@{chatbot_username}"
 
-    # Initialize the WebSocket connection
-    while True:
-        try:
-            # Initialize the WebSocket connection
-            driver.init_websocket(message_handler)
-        except Exception as e:
-            logging.error(f"Error initializing WebSocket: {str(e)} {traceback.format_exc()}")
-        time.sleep(2)
+def main():
+    try:
+        # Log in to the Mattermost server
+        driver.login()
+        global chatbot_username, chatbot_usernameAt
+        chatbot_username = driver.client.username
+        chatbot_usernameAt = f"@{chatbot_username}"
 
-except Exception as e:
-    logging.error(f"Error: {str(e)} {traceback.format_exc()}")
+        # Initialize the WebSocket connection
+        while True:
+            try:
+                # Initialize the WebSocket connection
+                driver.init_websocket(message_handler)
+            except Exception as e:
+                logging.error(f"Error initializing WebSocket: {str(e)} {traceback.format_exc()}")
+            time.sleep(2)
+
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt, logout and exit")
+        driver.logout()
+    except Exception as e:
+        logging.error(f"Error: {str(e)} {traceback.format_exc()}")
+
+
+if __name__ == '__main__':
+    main()
