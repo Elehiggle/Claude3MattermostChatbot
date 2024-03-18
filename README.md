@@ -23,7 +23,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/Claude3MattermostChatbot.git
+git clone https://github.com/Elehiggle/Claude3MattermostChatbot.git
 cd Claude3MattermostChatbot
 ```
 
