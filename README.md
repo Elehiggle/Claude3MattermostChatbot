@@ -14,7 +14,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 ## Prerequisites
 
-- Python 3.8 or just a server with [Docker](https://docs.docker.com/get-started/)
+- Python 3.12 or just a server with [Docker](https://docs.docker.com/get-started/). _(you can get away with using lower Python versions if you use datetime.datetime.utcnow() instead of datetime.datetime.now(datetime.UTC))_
 - Mattermost server with API access
 - Anthropic API key
 - Personal access token or login/password for a dedicated Mattermost user account for the chatbot
@@ -38,13 +38,19 @@ _or alternatively:_
 python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx
 ```
 
-3. Update the following variables in the script with your own values:
+3. Set the following environment variables with your own values:
 
-- `api_key`: Your Anthropic API key
-- `mattermost_url`: The URL of your Mattermost server
-- `personal_access_token`: The personal access token with relevant permissions from a dedicated Mattermost user account created specifically for the chatbot. Note that `mattermostdriver` does not support bot tokens.
-
-Alternatively, you can use the login/password combination for the dedicated Mattermost user account if you prefer, you would have to edit the call to the MattermostDriver for that.
+- `ANTHROPIC_API_KEY`: Your Anthropic API key
+- `ANTHROPIC_MODEL`: The Anthropic model to use. Default: "claude-3-opus-20240229"
+- `MATTERMOST_URL`: The URL of your Mattermost server
+- `MATTERMOST_TOKEN`: The personal access token with relevant permissions from a dedicated Mattermost user account created specifically for the chatbot. Note that `mattermostdriver` does not support bot tokens.
+- `MATTERMOST_USERNAME`: The username of the dedicated Mattermost user account for the chatbot (if using username/password login)
+- `MATTERMOST_PASSWORD`: The password of the dedicated Mattermost user account for the chatbot (if using username/password login)
+- `MATTERMOST_MFA_TOKEN`: The MFA token of the dedicated Mattermost user account for the chatbot (if using MFA)
+- `MATTERMOST_IGNORE_SENDER_ID`: The user ID of a user to ignore (optional, useful if you have multiple chatbots to prevent endless loops)
+- `MAX_RESPONSE_SIZE_MB`: The maximum size of the website content to extract (in megabytes). Default: "100"
+- `MAX_TOKENS`: The maximum number of tokens to generate in the response. Default: "4096" (max)
+- `TEMPERATURE`: The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"
 
 ## Usage
 
@@ -55,9 +61,9 @@ python3.8 chatbot.py
 ```
 
 The chatbot will connect to the Mattermost server and start listening for messages.
-When a user mentions "@chatbot" in a message or sends a direct message to the chatbot, the chatbot will process the message, extract text content from links (if any), handle image content using the Vision API, and send the response back to the Mattermost channel.
+When a user mentions the chatbot in a message or sends a direct message to the chatbot, the chatbot will process the message, extract text content from links (if any), handle image content using the Vision API, and send the response back to the Mattermost channel.
 
-> **Note:** If you don't trust your users, it's recommended to disable the URL/image grabbing feature, even though the chatbot filters out local addresses and IPs.
+> **Note:** If you don't trust your users at all, it's recommended to disable the URL/image grabbing feature, even though the chatbot filters out local addresses and IPs.
 
 ### Running with Docker
 
@@ -69,16 +75,11 @@ docker run -d --name chatbotclaude \
   -e ANTHROPIC_MODEL="claude-3-opus-20240229" \
   -e MATTERMOST_URL="your_mattermost_url" \
   -e MATTERMOST_TOKEN="your_mattermost_token" \
+  -e MAX_RESPONSE_SIZE_MB="100" \
+  -e MAX_TOKENS="4096" \
+  -e TEMPERATURE="0.15" \
   ghcr.io/elehiggle/claude3mattermostchatbot:latest
 ```
-
-## Configuration
-
-You can customize the behavior of the chatbot by modifying the following variables in the script:
-
-- `max_response_size`: The maximum size of the website content to extract (in bytes)
-- `max_tokens`: The maximum number of tokens to generate in the response
-- `temperature`: The temperature value for controlling the randomness of the generated responses
 
 ## Known Issues
 
