@@ -4,7 +4,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 ## Features
 
-- Responds to messages mentioning "@chatbot" or direct messages
+- Responds to messages mentioning "@chatbot" (or rather the chatbot's username) or direct messages
 - Extracts text content from links shared in the messages
 - Supports the **Vision API** for describing images provided as URLs within the chat message
 - Maintains context of the conversation within a thread
@@ -14,7 +14,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 ## Prerequisites
 
-- Python 3.8
+- Python 3.8 or just a server with [Docker](https://docs.docker.com/get-started/)
 - Mattermost server with API access
 - Anthropic API key
 - Personal access token or login/password for a dedicated Mattermost user account for the chatbot
@@ -31,6 +31,10 @@ cd Claude3MattermostChatbot
 2. Install the required dependencies:
 
 ```bash
+pip3 install -r requirements.txt
+```
+_or alternatively:_
+```bash
 python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx
 ```
 
@@ -40,7 +44,7 @@ python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 p
 - `mattermost_url`: The URL of your Mattermost server
 - `personal_access_token`: The personal access token with relevant permissions from a dedicated Mattermost user account created specifically for the chatbot. Note that `mattermostdriver` does not support bot tokens.
 
-Alternatively, you can use the login/password combination for the dedicated Mattermost user account if you prefer.
+Alternatively, you can use the login/password combination for the dedicated Mattermost user account if you prefer, you would have to edit the call to the MattermostDriver for that.
 
 ## Usage
 
@@ -72,14 +76,13 @@ docker run -d --name chatbotclaude \
 
 You can customize the behavior of the chatbot by modifying the following variables in the script:
 
-- `model`: The Anthropic model to use for generating responses
 - `max_response_size`: The maximum size of the website content to extract (in bytes)
 - `max_tokens`: The maximum number of tokens to generate in the response
 - `temperature`: The temperature value for controlling the randomness of the generated responses
 
 ## Known Issues
 
-While the chatbot works great for me, there might still be some bugs lurking inside. We've done our best to address them, but if you encounter any issues, please let me know!
+While the chatbot works great for me, there might still be some bugs lurking inside. I have done my best to address them, but if you encounter any issues, please let me know!
 
 ## Future Plans
 
