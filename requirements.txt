@@ -1,0 +1,6 @@
+anthropic
+mattermostdriver
+certifi
+beautifulsoup4
+pillow
+httpx

@@ -10,6 +10,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - Maintains context of the conversation within a thread
 - Sends typing indicators to show that the chatbot is processing the message
 - Utilizes a thread pool to handle multiple requests concurrently (due to `mattermostdriver-asyncio` being outdated)
+- Offers Docker support for easy deployment
 
 ## Prerequisites
 
@@ -38,7 +39,6 @@ python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 p
 - `api_key`: Your Anthropic API key
 - `mattermost_url`: The URL of your Mattermost server
 - `personal_access_token`: The personal access token with relevant permissions from a dedicated Mattermost user account created specifically for the chatbot. Note that `mattermostdriver` does not support bot tokens.
-- `chatbot_account`: The username of your chatbot account
 
 Alternatively, you can use the login/password combination for the dedicated Mattermost user account if you prefer.
 
@@ -54,6 +54,19 @@ The chatbot will connect to the Mattermost server and start listening for messag
 When a user mentions "@chatbot" in a message or sends a direct message to the chatbot, the chatbot will process the message, extract text content from links (if any), handle image content using the Vision API, and send the response back to the Mattermost channel.
 
 > **Note:** If you don't trust your users, it's recommended to disable the URL/image grabbing feature, even though the chatbot filters out local addresses and IPs.
+
+### Running with Docker
+
+You can also run the chatbot using Docker. Use the following command to run the chatbot container:
+
+```bash
+docker run -d --name chatbotclaude \
+  -e ANTHROPIC_API_KEY="your_anthropic_api_key" \
+  -e ANTHROPIC_MODEL="claude-3-opus-20240229" \
+  -e MATTERMOST_URL="your_mattermost_url" \
+  -e MATTERMOST_TOKEN="your_mattermost_token" \
+  ghcr.io/elehiggle/claude3mattermostchatbot:latest
+```
 
 ## Configuration
 
