@@ -37,22 +37,22 @@ ssl.create_default_context = cdc
 
 # Anthropic API key and model
 api_key = os.environ["ANTHROPIC_API_KEY"]
-model = os.environ["ANTHROPIC_MODEL"]
+model = os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229")
 
 # Mattermost server details
 mattermost_url = os.environ["MATTERMOST_URL"]
-mattermost_personal_access_token = os.environ["MATTERMOST_TOKEN"]
-mattermost_ignore_sender_id = os.environ["MATTERMOST_IGNORE_SENDER_ID"]
-mattermost_username = os.environ["MATTERMOST_USERNAME"]
-mattermost_password = os.environ["MATTERMOST_PASSWORD"]
-mattermost_mfa_token = os.environ["MATTERMOST_MFA_TOKEN"]
+mattermost_personal_access_token = os.getenv("MATTERMOST_TOKEN", "")
+mattermost_ignore_sender_id = os.getenv("MATTERMOST_IGNORE_SENDER_ID", "")
+mattermost_username = os.getenv("MATTERMOST_USERNAME", "")
+mattermost_password = os.getenv("MATTERMOST_PASSWORD", "")
+mattermost_mfa_token = os.getenv("MATTERMOST_MFA_TOKEN", "")
 
 # Maximum website size
-max_response_size = 1024 * 1024 * int(os.environ["MAX_RESPONSE_SIZE_MB"])
+max_response_size = 1024 * 1024 * int(os.getenv("MAX_RESPONSE_SIZE_MB", "100"))
 
 # Model parameters
-max_tokens = int(os.environ["MAX_TOKENS"])
-temperature = float(os.environ["TEMPERATURE"])
+max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
+temperature = float(os.getenv("TEMPERATURE", "0.15"))
 
 # For filtering local links
 regex_local_links = r'(?:127\.|192\.168\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|::1|[fF][cCdD]|localhost)'
