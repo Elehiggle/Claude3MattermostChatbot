@@ -43,7 +43,7 @@ python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 p
 - `ANTHROPIC_API_KEY`: Your Anthropic API key
 - `ANTHROPIC_MODEL`: The Anthropic model to use. Default: "claude-3-opus-20240229"
 - `MATTERMOST_URL`: The URL of your Mattermost server
-- `MATTERMOST_TOKEN`: The personal access token with relevant permissions from a dedicated Mattermost user account created specifically for the chatbot. Note that `mattermostdriver` does not support bot tokens.
+- `MATTERMOST_TOKEN`: The bot token (alternatively personal access token) with relevant permissions created specifically for the chatbot.
 - `MATTERMOST_USERNAME`: The username of the dedicated Mattermost user account for the chatbot (if using username/password login)
 - `MATTERMOST_PASSWORD`: The password of the dedicated Mattermost user account for the chatbot (if using username/password login)
 - `MATTERMOST_MFA_TOKEN`: The MFA token of the dedicated Mattermost user account for the chatbot (if using MFA)
