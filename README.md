@@ -85,13 +85,14 @@ docker run -d --name chatbotclaude \
 
 While the chatbot works great for me, there might still be some bugs lurking inside. I have done my best to address them, but if you encounter any issues, please let me know!
 
-## Future Plans
-
-I plan to create a similar project for integration with ChatGPT in the future.
-
 ## Monkey Patch
 
 Please note that the monkey patch in the code is necessary due to some SSL errors that occur because of a mistake within the `mattermostdriver` library. The patch ensures that the chatbot can establish a secure connection with the Mattermost server.
+
+## Related Projects
+
+[OpenAI ChatGPT Bot](https://github.com/Elehiggle/ChatGPTMattermostChatbot)
+
 
 ## Contributing
 
