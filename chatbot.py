@@ -83,7 +83,7 @@ thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
 def get_system_instructions():
     current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    return f"You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. Answer concisely. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question."
+    return f"You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question."
 
 
 def sanitize_username(username):
