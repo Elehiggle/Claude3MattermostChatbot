@@ -1,5 +1,7 @@
 # Claude3MattermostChatbot
 
+![Mattermost chat with bot example](./chat.png)
+
 This project is a chatbot for Mattermost that integrates with the Anthropic API to provide helpful responses to user messages. The chatbot - like this readme - is mostly written by **Claude 3 AI**, listens for messages mentioning the chatbot or direct messages, processes the messages, and sends the responses back to the Mattermost channel.
 
 ## Features
@@ -107,3 +109,4 @@ This project is licensed under the MIT License.
 - [Anthropic](https://www.anthropic.com/) for providing the API for generating responses
 - [Mattermost](https://mattermost.com/) for the messaging platform
 - [mattermostdriver](https://github.com/Vaelor/python-mattermost-driver) for the Mattermost API client library
+- [chatgpt-mattermost-bot](https://github.com/yGuy/chatgpt-mattermost-bot) for inspiring me to write this python code
