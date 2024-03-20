@@ -1,5 +1,4 @@
 import time
-import anthropic
 from mattermostdriver.driver import Driver
 import ssl
 import certifi
@@ -35,9 +34,12 @@ def cdc(*args, **kwargs):
 # monkey patching ssl.create_default_context to fix SSL error
 ssl.create_default_context = cdc
 
-# Anthropic API key and model
-api_key = os.environ["ANTHROPIC_API_KEY"]
-model = os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229")
+# AI parameters
+api_key = os.environ["AI_API_KEY"]
+model = os.getenv("AI_MODEL", "claude-3-opus-20240229")
+timeout = int(os.getenv("AI_TIMEOUT", "120"))
+max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
+temperature = float(os.getenv("TEMPERATURE", "0.15"))
 
 # Mattermost server details
 mattermost_url = os.environ["MATTERMOST_URL"]
@@ -49,10 +51,6 @@ mattermost_mfa_token = os.getenv("MATTERMOST_MFA_TOKEN", "")
 
 # Maximum website size
 max_response_size = 1024 * 1024 * int(os.getenv("MAX_RESPONSE_SIZE_MB", "100"))
-
-# Model parameters
-max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
-temperature = float(os.getenv("TEMPERATURE", "0.15"))
 
 # For filtering local links
 regex_local_links = r'(?:127\.|192\.168\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|::1|[fF][cCdD]|localhost)'
@@ -74,8 +72,8 @@ driver = Driver({
 chatbot_username = ""
 chatbot_usernameAt = ""
 
-# Create an Anthropic client instance
-anthropic_client = Anthropic(api_key=api_key)
+# Create an AI client instance
+ai_client = Anthropic(api_key=api_key)
 
 # Create a thread pool with a fixed number of worker threads
 thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
@@ -120,82 +118,89 @@ def ensure_alternating_roles(messages):
     return updated_messages
 
 
-def send_typing_indicator(user_id, channel_id, parent_id=None):
+def send_typing_indicator(user_id, channel_id, parent_id):
     """Send a "typing" indicator to show that work is in progress."""
     options = {
         "channel_id": channel_id,
-        "parent_id": parent_id
+        # "parent_id": parent_id  # somehow bugged/doesnt work
     }
     driver.client.make_request('post', f'/users/{user_id}/typing', options=options)
 
 
-def send_typing_indicator_loop(user_id, channel_id, stop_event):
+def send_typing_indicator_loop(user_id, channel_id, parent_id, stop_event):
     while not stop_event.is_set():
         try:
-            send_typing_indicator(user_id, channel_id)
+            send_typing_indicator(user_id, channel_id, parent_id)
             time.sleep(2)
         except Exception as e:
             logging.error(f"Error sending busy indicator: {str(e)} {traceback.format_exc()}")
 
 
-def handle_typing_indicator(user_id, channel_id):
+def handle_typing_indicator(user_id, channel_id, parent_id):
     stop_typing_event = threading.Event()
     typing_indicator_thread = threading.Thread(target=send_typing_indicator_loop,
-                                               args=(user_id, channel_id, stop_typing_event))
+                                               args=(user_id, channel_id, parent_id, stop_typing_event))
     typing_indicator_thread.start()
     return stop_typing_event, typing_indicator_thread
 
 
-def process_message(messages, channel_id, root_id, sender_name, links):
+def handle_text_generation(last_message, messages, channel_id, root_id, sender_name, links):
+    # Send the messages to the AI API
+    response = ai_client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=get_system_instructions(),
+        messages=messages,
+        timeout=timeout,
+        temperature=temperature
+    )
+
+    # Extract the text content from the ContentBlock object
+    content_blocks = response.content
+    response_text = ""
+    for block in content_blocks:
+        if block.type == 'text':
+            response_text += block.text
+
+    # Failsafe: Remove all blocks containing [CONTEXT
+    response_text = re.sub(r'(?s)\[CONTEXT.*?]', '', response_text).strip()
+
+    # Failsafe: Remove all input links from the response
+    for link in links:
+        response_text = response_text.replace(link, '')
+    response_text = response_text.strip()
+
+    # Send the API response back to the Mattermost channel as a reply to the thread or as a new thread
+    driver.posts.create_post({
+        "channel_id": channel_id,
+        "message": response_text,
+        "root_id": root_id
+    })
+
+
+def process_message(last_message, messages, channel_id, root_id, sender_name, links):
     stop_typing_event = None
     typing_indicator_thread = None
     try:
-        logger.info("Querying Anthropic API")
+        logger.info("Querying AI API")
 
         # Start the typing indicator
-        stop_typing_event, typing_indicator_thread = handle_typing_indicator(driver.client.userid, channel_id)
+        stop_typing_event, typing_indicator_thread = handle_typing_indicator(driver.client.userid, channel_id, root_id)
 
-        try:
-            # Send the messages to the Anthropic API
-            response = anthropic_client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                system=get_system_instructions(),
-                messages=messages,
-                timeout=120,
-                temperature=temperature
-            )
-        except anthropic.APITimeoutError:
-            logging.warning("Anthropic API call timed out after 2 minutes")
-            response_text = "Sorry, the API call took too long to respond."
-        else:
-            # Extract the text content from the ContentBlock object
-            content_blocks = response.content
-            response_text = ""
-            for block in content_blocks:
-                if block.type == 'text':
-                    response_text += block.text
+        handle_text_generation(last_message, messages, channel_id, root_id, sender_name, links)
 
-            # Failsafe: Remove all blocks containing [CONTEXT
-            response_text = re.sub(r'(?s)\[CONTEXT.*?]', '', response_text).strip()
-
-            # Failsafe: Remove all input links from the response
-            for link in links:
-                response_text = response_text.replace(link, '')
-            response_text = response_text.strip()
-
-        # Send the API response back to the Mattermost channel as a reply to the thread or as a new thread
+    except Exception as e:
+        logging.error(f"Error: {str(e)} {traceback.format_exc()}")
         driver.posts.create_post({
             "channel_id": channel_id,
-            "message": response_text,
+            "message": str(e),
             "root_id": root_id
         })
 
-    except Exception as e:
-        logging.error(f"Error processing message: {str(e)} {traceback.format_exc()}")
     finally:
         if stop_typing_event is not None:
             stop_typing_event.set()
+        if typing_indicator_thread is not None:
             typing_indicator_thread.join()
 
 
@@ -388,7 +393,7 @@ async def message_handler(event):
                     messages = ensure_alternating_roles(messages)
 
                     # Submit the task to the thread pool. We do this because Mattermostdriver-async is outdated
-                    thread_pool.submit(process_message, messages, channel_id, root_id, sender_name, links)
+                    thread_pool.submit(process_message, message, messages, channel_id, root_id, sender_name, links)
 
             except Exception as e:
                 logging.error(f"Error inner message handler: {str(e)} {traceback.format_exc()}")
