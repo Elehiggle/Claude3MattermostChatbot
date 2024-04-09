@@ -38,7 +38,7 @@ pip3 install -r requirements.txt
 ```
 _or alternatively:_
 ```bash
-python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx
+python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx
 ```
 
 3. Set the following environment variables with your own values:
@@ -63,7 +63,7 @@ python3.8 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 p
 Run the script:
 
 ```bash
-python3.8 chatbot.py
+python3.12 chatbot.py
 ```
 
 The chatbot will connect to the Mattermost server and start listening for messages.
