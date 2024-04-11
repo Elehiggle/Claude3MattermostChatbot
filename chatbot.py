@@ -40,10 +40,18 @@ model = os.getenv("AI_MODEL", "claude-3-opus-20240229")
 timeout = int(os.getenv("AI_TIMEOUT", "120"))
 max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
 temperature = float(os.getenv("TEMPERATURE", "0.15"))
+system_prompt_unformatted = os.getenv(
+    "AI_SYSTEM_PROMPT",
+    "You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question.",
+)
 
 # Mattermost server details
 mattermost_url = os.environ["MATTERMOST_URL"]
-mattermost_personal_access_token = os.getenv("MATTERMOST_TOKEN", "")
+mattermost_scheme = os.getenv("MATTERMOST_SCHEME", "https")
+mattermost_port = int(os.getenv("MATTERMOST_PORT", "443"))
+mattermost_basepath = os.getenv("MATTERMOST_BASEPATH", "/api/v4")
+mattermost_cert_verify = os.getenv("MATTERMOST_CERT_VERIFY", True)
+mattermost_token = os.getenv("MATTERMOST_TOKEN", "")
 mattermost_ignore_sender_id = os.getenv("MATTERMOST_IGNORE_SENDER_ID", "")
 mattermost_username = os.getenv("MATTERMOST_USERNAME", "")
 mattermost_password = os.getenv("MATTERMOST_PASSWORD", "")
@@ -59,14 +67,14 @@ regex_local_links = r"(?:127\.|192\.168\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.
 driver = Driver(
     {
         "url": mattermost_url,
-        "token": mattermost_personal_access_token,
+        "token": mattermost_token,
         "login_id": mattermost_username,
         "password": mattermost_password,
         "mfa_token": mattermost_mfa_token,
-        "scheme": "https",
-        "port": 443,
-        "basepath": "/api/v4",
-        "verify": True,
+        "scheme": mattermost_scheme,
+        "port": mattermost_port,
+        "basepath": mattermost_basepath,
+        "verify": mattermost_cert_verify,
     }
 )
 
@@ -80,13 +88,14 @@ ai_client = Anthropic(api_key=api_key)
 # Create a thread pool with a fixed number of worker threads
 thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
-
 def get_system_instructions():
     current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[
         :-3
     ]
-    return f"You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question."
-
+    global chatbot_username
+    return system_prompt_unformatted.format(
+        current_time=current_time, chatbot_username=chatbot_username
+    )
 
 def sanitize_username(username):
     if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", username):
@@ -191,7 +200,7 @@ def split_message(msg, max_length=4000):
             return f"```{code_lang}\n"
         return ""
 
-    lines = msg.split('\n')
+    lines = msg.split("\n")
     for i, line in enumerate(lines):
         # Check if this line starts or ends a code block
         if line.startswith("```"):
@@ -206,7 +215,9 @@ def split_message(msg, max_length=4000):
             else:
                 # Starting a new code block, capture the language
                 in_code_block = True
-                code_block_lang = line[3:].strip()  # Remove the backticks and get the language
+                code_block_lang = line[
+                    3:
+                ].strip()  # Remove the backticks and get the language
                 current_chunk += line + "\n"
         else:
             # If adding this line exceeds the max length, we need to split here
@@ -214,11 +225,15 @@ def split_message(msg, max_length=4000):
                 # Split here, preserve the code block state and language if necessary
                 current_chunk = add_chunk(current_chunk, in_code_block, code_block_lang)
                 current_chunk += line
-                if i < len(lines) - 1:  # Avoid adding a newline at the end of the last line
+                if (
+                    i < len(lines) - 1
+                ):  # Avoid adding a newline at the end of the last line
                     current_chunk += "\n"
             else:
                 current_chunk += line
-                if i < len(lines) - 1:  # Avoid adding a newline at the end of the last line
+                if (
+                    i < len(lines) - 1
+                ):  # Avoid adding a newline at the end of the last line
                     current_chunk += "\n"
 
     # Don't forget to add the last chunk
@@ -308,7 +323,7 @@ async def message_handler(event):
                 sender_id == driver.client.userid
                 or sender_id == mattermost_ignore_sender_id
             ):
-                logging.info("Ignoring post from a ignored sender ID")
+                logging.info("Ignoring post from an ignored sender ID")
                 return
 
             # Check if the post is from a bot
@@ -565,6 +580,8 @@ def main():
         global chatbot_username, chatbot_usernameAt
         chatbot_username = driver.client.username
         chatbot_usernameAt = f"@{chatbot_username}"
+
+        logging.info(f"SYSTEM PROMPT: {get_system_instructions()}")
 
         # Initialize the WebSocket connection
         while True:

@@ -50,22 +50,32 @@ _or alternatively:_
 python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx
 ```
 
-3. Set the following environment variables with your own values:
+3. Set the following environment variables with your own values (most are optional):
 
-| Parameter | Description                                                                                                                                                          |
-| --- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `AI_API_KEY` | Your Anthropic API key                                                                                                                                               |
-| `AI_MODEL` | The Anthropic model to use. Default: "claude-3-opus-20240229"                                                                                                        |
-| `AI_TIMEOUT` | The timeout for the AI API call in seconds. Default: "120"                                                                                                           |
-| `MAX_RESPONSE_SIZE_MB` | The maximum size of the website content to extract (in megabytes). Default: "100"                                                                                    |
-| `MAX_TOKENS` | The maximum number of tokens to generate in the response. Default: "4096" (max)                                                                                      |
-| `TEMPERATURE` | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                              |
-| `MATTERMOST_URL` | The URL of your Mattermost server                                                                                                                                    |
-| `MATTERMOST_TOKEN` | The bot token (alternatively personal access token) with relevant permissions created specifically for the chatbot. Don't forget to add the bot account to the team. |
-| `MATTERMOST_USERNAME` | The username of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                             |
-| `MATTERMOST_PASSWORD` | The password of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                             |
-| `MATTERMOST_MFA_TOKEN` | The MFA token of the dedicated Mattermost user account for the chatbot (if using MFA)                                                                                |
-| `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots to prevent endless loops)                                                            |
+| Parameter              | Description                                                                                                                                                                                               |
+|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `AI_API_KEY`           | Required. Your Anthropic API key                                                                                                                                                                          |
+| `AI_MODEL`             | The Anthropic model to use. Default: "claude-3-opus-20240229"                                                                                                                                             |
+| `MATTERMOST_URL`       | Required. The URL of your Mattermost server                                                                                                                                                               |
+| `MATTERMOST_TOKEN`     | Required if not using user/password. The bot token (alternatively personal access token) with relevant permissions created specifically for the chatbot. Don't forget to add the bot account to the team. |
+| `MATTERMOST_USERNAME`  | Required if not using token. The username of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                                     |
+| `MATTERMOST_PASSWORD`  | Required if not using token. The password of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                                     |
+| `MATTERMOST_MFA_TOKEN` | The MFA token of the dedicated Mattermost user account for the chatbot (if using MFA)                                                                                                                     |
+
+#### Extended optional configuration variables:
+
+| Parameter                     | Description                                                                                                                                                                                                                                                                                    |
+|-------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `AI_SYSTEM_PROMPT`            | The system prompt/instructions. Default: [click](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/a1e1813c40f44f5231d10ee3f25ef6eee13ae58f/chatbot.py#L88) (Subject to change. current_time and chatbot_username variables inside the prompt will be auto-formatted and substituted. |
+| `AI_TIMEOUT`                  | The timeout for the AI API call in seconds. Default: "120"                                                                                                                                                                                                                                     |
+| `MAX_TOKENS`                  | The maximum number of tokens to generate in the response. Default: "4096" (max)                                                                                                                                                                                                                |
+| `TEMPERATURE`                 | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                                                                                                                                                        |
+| `MAX_RESPONSE_SIZE_MB`        | The maximum size of the website content to extract (in megabytes). Default: "100"                                                                                                                                                                                                              |
+| `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots to prevent endless loops)                                                                                                                                                                                      |
+| `MATTERMOST_PORT`             | The port of your Mattermost server. Default: "443"                                                                                                                                                                                                                                             |
+| `MATTERMOST_SCHEME`           | The scheme of the connection. Default: "https"                                                                                                                                                                                                                                                 |
+| `MATTERMOST_BASEPATH`         | The basepath of your Mattermost server. Default: "/api/v4"                                                                                                                                                                                                                                     |
+| `MATTERMOST_CERT_VERIFY`      | Cert verification. Default: True (also: string path to your certificate file)                                                                                                                                                                                                                  |
 
 ## Usage
 
