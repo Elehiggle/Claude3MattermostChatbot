@@ -1,3 +1,12 @@
+<p align="center">
+  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/stargazers"><img src="https://img.shields.io/github/stars/Elehiggle/Claude3MattermostChatbot?style=flat-square" alt="GitHub Repo stars"></a>
+  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/actions/workflows/docker-publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/Elehiggle/Claude3MattermostChatbot/docker-publish.yml?branch=master&label=build&logo=github&style=flat-square" alt="GitHub Actions Workflow Status"></a>
+  <a href="https://hub.docker.com/r/elehiggle/claude3mattermostchatbot"><img src="https://img.shields.io/docker/stars/elehiggle/claude3mattermostchatbot.svg?style=flat-square&logo=docker" alt="Docker Stars"></a>
+  <a href="https://hub.docker.com/r/elehiggle/claude3mattermostchatbot"><img src="https://img.shields.io/docker/pulls/elehiggle/claude3mattermostchatbot.svg?style=flat-square&logo=docker" alt="Docker Pulls"></a>
+  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/commits/master"><img src="https://img.shields.io/github/last-commit/Elehiggle/Claude3MattermostChatbot?style=flat-square" alt="GitHub last commit"></a>
+  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Elehiggle/Claude3MattermostChatbot?style=flat-square" alt="GitHub License"></a>
+</p>
+
 # Claude3MattermostChatbot
 
 ![Mattermost chat with bot example](./chat.png)
