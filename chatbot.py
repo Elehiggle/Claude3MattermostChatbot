@@ -37,6 +37,7 @@ ssl.create_default_context = cdc
 # AI parameters
 api_key = os.environ["AI_API_KEY"]
 model = os.getenv("AI_MODEL", "claude-3-opus-20240229")
+ai_api_baseurl = os.getenv("AI_API_BASEURL", None)
 timeout = int(os.getenv("AI_TIMEOUT", "120"))
 max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
 temperature = float(os.getenv("TEMPERATURE", "0.15"))
@@ -83,10 +84,11 @@ chatbot_username = ""
 chatbot_usernameAt = ""
 
 # Create an AI client instance
-ai_client = Anthropic(api_key=api_key)
+ai_client = Anthropic(api_key=api_key, base_url=ai_api_baseurl)
 
 # Create a thread pool with a fixed number of worker threads
 thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+
 
 def get_system_instructions():
     current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[
@@ -96,6 +98,7 @@ def get_system_instructions():
     return system_prompt_unformatted.format(
         current_time=current_time, chatbot_username=chatbot_username
     )
+
 
 def sanitize_username(username):
     if not re.match(r"^[a-zA-Z0-9_-]{1,64}$", username):

@@ -76,6 +76,7 @@ python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 
 | `MATTERMOST_SCHEME`           | The scheme of the connection. Default: "https"                                                                                                                                                                                                                                                 |
 | `MATTERMOST_BASEPATH`         | The basepath of your Mattermost server. Default: "/api/v4"                                                                                                                                                                                                                                     |
 | `MATTERMOST_CERT_VERIFY`      | Cert verification. Default: True (also: string path to your certificate file)                                                                                                                                                                                                                  |
+| `AI_API_BASEURL`              | AI API Base URL. Default: None (which will use "https://api.anthropic.com"). Useful if you want to use a different AI with Anthropic compatible endpoint                                                                                                                                       |
 
 ## Usage
 
