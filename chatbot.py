@@ -16,6 +16,7 @@ import base64
 import httpx
 from io import BytesIO
 from PIL import Image
+from youtube_transcript_api import YouTubeTranscriptApi
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
 temperature = float(os.getenv("TEMPERATURE", "0.15"))
 system_prompt_unformatted = os.getenv(
     "AI_SYSTEM_PROMPT",
-    "You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question.",
+    "You are a helpful assistant. The current UTC time is {current_time}. Whenever users asks you for help you will provide them with succinct answers formatted using Markdown; do not unnecessarily greet people with their name. Do not be apologetic. You know the user's name as it is provided within [CONTEXT, from:username] bracket at the beginning of a user-role message. Never add any CONTEXT bracket to your replies (eg. [CONTEXT, from:{chatbot_username}]). The CONTEXT bracket may also include grabbed text from a website if a user adds a link to his question. Users may post YouTube links for which you will get the transcript, in your answer DO NOT don't contain the link to the video the user just provided to you as he already knows it.",
 )
 
 # Mattermost server details
@@ -81,7 +82,7 @@ driver = Driver(
 
 # Chatbot account username, automatically fetched
 chatbot_username = ""
-chatbot_usernameAt = ""
+chatbot_username_at = ""
 
 # Create an AI client instance
 ai_client = Anthropic(api_key=api_key, base_url=ai_api_baseurl)
@@ -94,7 +95,6 @@ def get_system_instructions():
     current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[
         :-3
     ]
-    global chatbot_username
     return system_prompt_unformatted.format(
         current_time=current_time, chatbot_username=chatbot_username
     )
@@ -183,7 +183,7 @@ def split_message(msg, max_length=4000):
         return [msg]
 
     if len(msg) > 40000:
-        raise Exception(f"Message too long.")
+        raise Exception("Message too long.")
 
     current_chunk = ""  # Holds the current message chunk
     chunks = []  # Collects all message chunks
@@ -274,6 +274,9 @@ def handle_text_generation(
         response_text = response_text.replace(link, "")
     response_text = response_text.strip()
 
+    # Failsafe: Remove all empty Markdown links
+    response_text = re.sub(r"\[.*?]\(\)", "", response_text).strip()
+
     # Split the response into multiple messages if necessary
     response_parts = split_message(response_text)
 
@@ -335,7 +338,7 @@ async def message_handler(event):
                 return
 
             # Remove the "@chatbot" mention from the message
-            message = post["message"].replace(chatbot_usernameAt, "").strip()
+            message = post["message"].replace(chatbot_username_at, "").strip()
             channel_id = post["channel_id"]
             sender_name = sanitize_username(event_data["data"]["sender_name"])
             root_id = post["root_id"]  # Get the root_id of the thread
@@ -383,7 +386,7 @@ async def message_handler(event):
 
                 # Add the current message to the messages array if "@chatbot" is mentioned, the chatbot has already been invoked in the thread or its a DM
                 if (
-                    chatbot_usernameAt in post["message"]
+                    chatbot_username_at in post["message"]
                     or chatbot_invoked
                     or channel_display_name.startswith("@")
                 ):
@@ -400,6 +403,11 @@ async def message_handler(event):
                                 logging.info(f"Skipping local URL: {link}")
                                 continue
                             try:
+                                if yt_is_valid_url(link):
+                                    transcript_text = yt_get_transcript(link)
+                                    extracted_text += transcript_text
+                                    continue
+
                                 with client.stream(
                                     "GET", link, timeout=4, follow_redirects=True
                                 ) as response:
@@ -576,13 +584,69 @@ async def message_handler(event):
         logging.error(f"Error message_handler: {str(e)} {traceback.format_exc()}")
 
 
+def yt_find_preferred_transcript(video_id):
+    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+
+    # Define the preferred order of transcript types and languages
+    preferred_order = [
+        ("manual", "en"),
+        ("manual", None),
+        ("generated", "en"),
+        ("generated", None),
+    ]
+
+    # Convert the TranscriptList to a regular list
+    transcripts = list(transcript_list)
+
+    # Sort the transcripts based on the preferred order
+    transcripts.sort(
+        key=lambda t: (
+            preferred_order.index((t.is_generated, t.language_code))
+            if (t.is_generated, t.language_code) in preferred_order
+            else len(preferred_order)
+        )
+    )
+
+    # Return the first transcript in the sorted list
+    return transcripts[0] if transcripts else None
+
+
+def yt_extract_video_id(url):
+    pattern = r"(?:youtube\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/|youtube\.com/shorts/)([^\"&?/\s]{11})"
+    match = re.search(pattern, url)
+    return match.group(1) if match else None
+
+
+def yt_get_transcript(url):
+    try:
+        video_id = yt_extract_video_id(url)
+        preferred_transcript = yt_find_preferred_transcript(video_id)
+
+        if preferred_transcript:
+            transcript = preferred_transcript.fetch()
+            return str(transcript)
+    except Exception as e:
+        logging.info(f"YouTube Transcript Exception: {str(e)}")
+
+    return (
+        "*COULD NOT FETCH THE VIDEO TRANSCRIPT FOR THE CHATBOT, WARN THE CHATBOT USER*"
+    )
+
+
+def yt_is_valid_url(url):
+    # Pattern to match various YouTube URL formats including video IDs
+    pattern = r"(?:youtube\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/|youtube\.com/shorts/)([^\"&?/\s]{11})"
+    match = re.search(pattern, url)
+    return bool(match)  # True if match found, False otherwise
+
+
 def main():
     try:
         # Log in to the Mattermost server
         driver.login()
-        global chatbot_username, chatbot_usernameAt
+        global chatbot_username, chatbot_username_at
         chatbot_username = driver.client.username
-        chatbot_usernameAt = f"@{chatbot_username}"
+        chatbot_username_at = f"@{chatbot_username}"
 
         logging.info(f"SYSTEM PROMPT: {get_system_instructions()}")
 

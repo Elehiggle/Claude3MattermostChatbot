@@ -1,11 +1,10 @@
-<p align="center">
-  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/stargazers"><img src="https://img.shields.io/github/stars/Elehiggle/Claude3MattermostChatbot?style=flat-square" alt="GitHub Repo stars"></a>
-  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/actions/workflows/docker-publish.yml"><img src="https://img.shields.io/github/actions/workflow/status/Elehiggle/Claude3MattermostChatbot/docker-publish.yml?branch=master&label=build&logo=github&style=flat-square" alt="GitHub Actions Workflow Status"></a>
-  <a href="https://hub.docker.com/r/elehiggle/claude3mattermostchatbot"><img src="https://img.shields.io/docker/stars/elehiggle/claude3mattermostchatbot.svg?style=flat-square&logo=docker" alt="Docker Stars"></a>
-  <a href="https://hub.docker.com/r/elehiggle/claude3mattermostchatbot"><img src="https://img.shields.io/docker/pulls/elehiggle/claude3mattermostchatbot.svg?style=flat-square&logo=docker" alt="Docker Pulls"></a>
-  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/commits/master"><img src="https://img.shields.io/github/last-commit/Elehiggle/Claude3MattermostChatbot?style=flat-square" alt="GitHub last commit"></a>
-  <a href="https://github.com/Elehiggle/Claude3MattermostChatbot/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Elehiggle/Claude3MattermostChatbot?style=flat-square" alt="GitHub License"></a>
-</p>
+[![GitHub Repo stars](https://img.shields.io/github/stars/Elehiggle/Claude3MattermostChatbot?style=flat-square)](https://github.com/Elehiggle/Claude3MattermostChatbot/stargazers)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Elehiggle/Claude3MattermostChatbot/docker-publish.yml?branch=master&label=build&logo=github&style=flat-square)](https://github.com/Elehiggle/Claude3MattermostChatbot/actions/workflows/docker-publish.yml)
+[![Docker Stars](https://img.shields.io/docker/stars/elehiggle/claude3mattermostchatbot.svg?style=flat-square&logo=docker)](https://hub.docker.com/r/elehiggle/claude3mattermostchatbot)
+[![Docker Pulls](https://img.shields.io/docker/pulls/elehiggle/claude3mattermostchatbot.svg?style=flat-square&logo=docker)](https://hub.docker.com/r/elehiggle/claude3mattermostchatbot)
+[![GitHub last commit](https://img.shields.io/github/last-commit/Elehiggle/Claude3MattermostChatbot?style=flat-square)](https://github.com/Elehiggle/Claude3MattermostChatbot/commits/master)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/2a60f2fb1c0d4e53922aa79f7204dac4)](https://app.codacy.com/gh/Elehiggle/Claude3MattermostChatbot/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![GitHub License](https://img.shields.io/github/license/Elehiggle/Claude3MattermostChatbot?style=flat-square)](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/master/LICENSE)
 
 # Claude3MattermostChatbot
 
@@ -18,6 +17,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - Responds to messages mentioning "@chatbot" (or rather the chatbot's username) or direct messages
 - Extracts text content from links shared in the messages
 - Supports the **Vision API** for describing images provided as URLs within the chat message
+- Gets transcripts of YouTube videos for easy tl;dw summarizations
 - Maintains context of the conversation within a thread
 - Sends typing indicators to show that the chatbot is processing the message
 - Utilizes a thread pool to handle multiple requests concurrently (due to `mattermostdriver-asyncio` being outdated)
@@ -35,20 +35,20 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 1. Clone the repository:
 
-```bash
-git clone https://github.com/Elehiggle/Claude3MattermostChatbot.git
-cd Claude3MattermostChatbot
-```
+    ```bash
+    git clone https://github.com/Elehiggle/Claude3MattermostChatbot.git
+    cd Claude3MattermostChatbot
+    ```
 
 2. Install the required dependencies:
 
-```bash
-pip3 install -r requirements.txt
-```
-_or alternatively:_
-```bash
-python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx
-```
+    ```bash
+    pip3 install -r requirements.txt
+    ```
+   _or alternatively:_
+    ```bash
+    python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx youtube-transcript-api
+    ```
 
 3. Set the following environment variables with your own values (most are optional):
 
@@ -62,7 +62,7 @@ python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 
 | `MATTERMOST_PASSWORD`  | Required if not using token. The password of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                                     |
 | `MATTERMOST_MFA_TOKEN` | The MFA token of the dedicated Mattermost user account for the chatbot (if using MFA)                                                                                                                     |
 
-#### Extended optional configuration variables:
+### Extended optional configuration variables:
 
 | Parameter                     | Description                                                                                                                                                                                                                                                                                    |
 |-------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
