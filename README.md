@@ -16,8 +16,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 - **Responds to messages** mentioning "@chatbot" (or rather the chatbot's username) or direct messages
 - **Extracts text content from links** shared in the messages. Also supports **FlareSolverr** to bypass
-  Javascript/CAPTCHA
-  restrictions
+  Javascript/CAPTCHA restrictions
 - Supports the **Vision API** for describing images provided as URLs within the chat message
 - **Gets transcripts of YouTube videos** for easy tl;dw summarizations
 - Maintains context of the conversation within a thread
@@ -137,3 +136,4 @@ This project is licensed under the MIT License.
 - [Mattermost](https://mattermost.com/) for the messaging platform
 - [mattermostdriver](https://github.com/Vaelor/python-mattermost-driver) for the Mattermost API client library
 - [chatgpt-mattermost-bot](https://github.com/yGuy/chatgpt-mattermost-bot) for inspiring me to write this python code
+- [youtube-transcript-api](https://pypi.org/project/youtube-transcript-api/) for the YouTube Transcript Fetch library

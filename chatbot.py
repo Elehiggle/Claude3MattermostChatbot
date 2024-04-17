@@ -546,11 +546,19 @@ async def message_handler(event):
                                         # Handle text content
                                         try:
                                             if flaresolverr_endpoint:
-                                                extracted_text += extract_content_with_flaresolverr(link, flaresolverr_endpoint)
+                                                extracted_text += (
+                                                    extract_content_with_flaresolverr(
+                                                        link, flaresolverr_endpoint
+                                                    )
+                                                )
                                             else:
-                                                raise Exception("FlareSolverr endpoint not available")
+                                                raise Exception(
+                                                    "FlareSolverr endpoint not available"
+                                                )
                                         except Exception as e:
-                                            logging.info(f"Falling back to HTTPX. Reason: {str(e)}")
+                                            logging.info(
+                                                f"Falling back to HTTPX. Reason: {str(e)}"
+                                            )
 
                                         content_chunks = []
                                         for chunk in response.iter_bytes():
