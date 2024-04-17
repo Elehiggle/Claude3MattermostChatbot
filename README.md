@@ -14,14 +14,16 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 ## Features
 
-- Responds to messages mentioning "@chatbot" (or rather the chatbot's username) or direct messages
-- Extracts text content from links shared in the messages
+- **Responds to messages** mentioning "@chatbot" (or rather the chatbot's username) or direct messages
+- **Extracts text content from links** shared in the messages. Also supports **FlareSolverr** to bypass
+  Javascript/CAPTCHA
+  restrictions
 - Supports the **Vision API** for describing images provided as URLs within the chat message
-- Gets transcripts of YouTube videos for easy tl;dw summarizations
+- **Gets transcripts of YouTube videos** for easy tl;dw summarizations
 - Maintains context of the conversation within a thread
 - Sends typing indicators to show that the chatbot is processing the message
 - Utilizes a thread pool to handle multiple requests concurrently (due to `mattermostdriver-asyncio` being outdated)
-- Offers Docker support for easy deployment
+- Offers **Docker support** for easy deployment
 
 ## Prerequisites
 
@@ -29,7 +31,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - Anthropic API key
 - Mattermost server with API access
 - Mattermost Bot token (alternatively personal access token or login/password for a dedicated Mattermost user account for the chatbot)
-- The bot account needs to be added to the team
+- The bot account needs to be added to the team and to the channels you want it to watch
 
 ## Installation
 
@@ -47,7 +49,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
     ```
    _or alternatively:_
     ```bash
-    python3.12 -m pip install anthropic mattermostdriver ssl certifi beautifulsoup4 pillow httpx youtube-transcript-api
+    python3.12 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api
     ```
 
 3. Set the following environment variables with your own values (most are optional):
@@ -66,11 +68,12 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 | Parameter                     | Description                                                                                                                                                                                                                                                                                    |
 |-------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `AI_SYSTEM_PROMPT`            | The system prompt/instructions. Default: [click](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/a1e1813c40f44f5231d10ee3f25ef6eee13ae58f/chatbot.py#L88) (Subject to change. current_time and chatbot_username variables inside the prompt will be auto-formatted and substituted. |
+| `AI_SYSTEM_PROMPT`            | The system prompt/instructions. Default: [click](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/d82b0dfc0065aa6c88ad2b2c4e6990252f20e247/chatbot.py#L47) (Subject to change. current_time and chatbot_username variables inside the prompt will be auto-formatted and substituted. |
 | `AI_TIMEOUT`                  | The timeout for the AI API call in seconds. Default: "120"                                                                                                                                                                                                                                     |
 | `MAX_TOKENS`                  | The maximum number of tokens to generate in the response. Default: "4096" (max)                                                                                                                                                                                                                |
 | `TEMPERATURE`                 | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                                                                                                                                                        |
 | `MAX_RESPONSE_SIZE_MB`        | The maximum size of the website content to extract (in megabytes). Default: "100"                                                                                                                                                                                                              |
+| `FLARESOLVERR_ENDPOINT`       | Endpoint URL to your [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) instance (eg. http://192.168.1.55:8191/v1). If you use this, MAX_RESPONSE_SIZE_MB won't be honored since it can't stream content                                                                             |
 | `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots to prevent endless loops)                                                                                                                                                                                      |
 | `MATTERMOST_PORT`             | The port of your Mattermost server. Default: "443"                                                                                                                                                                                                                                             |
 | `MATTERMOST_SCHEME`           | The scheme of the connection. Default: "https"                                                                                                                                                                                                                                                 |
@@ -101,7 +104,6 @@ docker run -d --name chatbotclaude \
   -e AI_MODEL="claude-3-opus-20240229" \
   -e MATTERMOST_URL="mattermostinstance.example.com" \
   -e MATTERMOST_TOKEN="your_mattermost_token" \
-  -e MAX_RESPONSE_SIZE_MB="100" \
   -e MAX_TOKENS="4096" \
   -e TEMPERATURE="0.15" \
   ghcr.io/elehiggle/claude3mattermostchatbot:latest
@@ -119,7 +121,7 @@ Please note that the monkey patch in the code is necessary due to some SSL error
 
 ## Related Projects
 
-[OpenAI ChatGPT Bot](https://github.com/Elehiggle/ChatGPTMattermostChatbot)
+[OpenAI ChatGPT Mattermost Chatbot](https://github.com/Elehiggle/ChatGPTMattermostChatbot)
 
 ## Contributing
 
