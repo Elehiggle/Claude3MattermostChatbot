@@ -18,7 +18,8 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - **Extracts text content from links** shared in the messages. Also supports **FlareSolverr** to bypass
   Javascript/CAPTCHA restrictions
 - Supports the **Vision API** for describing images provided as URLs within the chat message
-- **Gets transcripts of YouTube videos** for easy tl;dw summarizations
+- **Gets transcripts of YouTube videos** for easy tl;dw summarizations. Title, description and uploader are also
+  provided
 - Maintains context of the conversation within a thread
 - Sends typing indicators to show that the chatbot is processing the message
 - Utilizes a thread pool to handle multiple requests concurrently (due to `mattermostdriver-asyncio` being outdated)
@@ -26,7 +27,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 
 ## Prerequisites
 
-- Python 3.11 or just a server with [Docker](https://docs.docker.com/get-started/). _(you can get away with using 3.8 if
+- Python 3.11 or just a server with [Docker](https://docs.docker.com/get-started/) _(you can get away with using 3.8 if
   you use datetime.datetime.utcnow() instead of datetime.datetime.now(datetime.UTC))_
 - Anthropic API key
 - Mattermost server with API access
@@ -49,7 +50,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
     ```
    _or alternatively:_
     ```bash
-    python3.12 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api
+    python3.12 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp
     ```
 
 3. Set the following environment variables with your own values (most are optional):
@@ -138,3 +139,4 @@ This project is licensed under the MIT License.
 - [mattermostdriver](https://github.com/Vaelor/python-mattermost-driver) for the Mattermost API client library
 - [chatgpt-mattermost-bot](https://github.com/yGuy/chatgpt-mattermost-bot) for inspiring me to write this python code
 - [youtube-transcript-api](https://pypi.org/project/youtube-transcript-api/) for the YouTube Transcript Fetch library
+- [yt-dlp](https://pypi.org/project/yt-dlp/) for the YouTube API that allows us to fetch details

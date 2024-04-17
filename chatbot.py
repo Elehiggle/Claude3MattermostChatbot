@@ -16,6 +16,7 @@ from PIL import Image
 from mattermostdriver.driver import Driver
 from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
+from yt_dlp import YoutubeDL
 from anthropic import Anthropic
 
 logging.basicConfig(level=logging.INFO)
@@ -428,8 +429,18 @@ async def message_handler(event):
                                 continue
                             try:
                                 if yt_is_valid_url(link):
-                                    transcript_text = yt_get_transcript(link)
-                                    extracted_text += transcript_text
+                                    title, description, uploader = yt_get_video_info(
+                                        link
+                                    )
+                                    transcript = yt_get_transcript(link)
+                                    extracted_text += f"""
+                                    <youtube_video_details>
+                                        <title>{title}</title>
+                                        <description>{description}</description>
+                                        <uploader>{uploader}</uploader>
+                                        <transcript>{transcript}</transcript>
+                                    </youtube_video_details>
+                                    """
                                     continue
 
                                 with client.stream(
@@ -465,7 +476,7 @@ async def message_handler(event):
                                             image_data += chunk
                                             total_size += len(chunk)
                                             if total_size > max_response_size:
-                                                extracted_text += "*WEBSITE SIZE EXCEEDED THE MAXIMUM LIMIT FOR THE CHATBOT, WARN THE CHATBOT USER*"
+                                                extracted_text += "<chatbot_error>website size exceeded the maximum limit for the chatbot, warn the chatbot user</chatbot_error>"
                                                 raise Exception(
                                                     "Response size exceeds the maximum limit at image processing"
                                                 )
@@ -549,11 +560,8 @@ async def message_handler(event):
                                         # Handle text content
                                         try:
                                             if flaresolverr_endpoint:
-                                                extracted_text += (
-                                                    extract_content_with_flaresolverr(
-                                                        link
-                                                    )
-                                                )
+                                                website_text = extract_content_with_flaresolverr(link)
+                                                extracted_text += f"<website_extracted_text_content>{website_text}</website_extracted_text_content>"
                                             else:
                                                 raise Exception(
                                                     "FlareSolverr endpoint not available"
@@ -568,15 +576,16 @@ async def message_handler(event):
                                             content_chunks.append(chunk)
                                             total_size += len(chunk)
                                             if total_size > max_response_size:
-                                                extracted_text += "*WEBSITE SIZE EXCEEDED THE MAXIMUM LIMIT FOR THE CHATBOT, WARN THE CHATBOT USER*"
+                                                extracted_text += "<chatbot_error>website size exceeded the maximum limit for the chatbot, warn the chatbot user</chatbot_error>"
                                                 raise Exception(
                                                     "Response size exceeds the maximum limit"
                                                 )
                                         content = b"".join(content_chunks)
                                         soup = BeautifulSoup(content, "html.parser")
-                                        extracted_text += soup.get_text(
+                                        website_text = soup.get_text(
                                             " | ", strip=True
                                         )
+                                        extracted_text += f"<website_extracted_text_content>{website_text}</website_extracted_text_content>"
                             except Exception as e:
                                 logging.error(
                                     f"Error extracting content from link {link}: {str(e)} {traceback.format_exc()}"
@@ -671,9 +680,26 @@ def yt_get_transcript(url):
     except Exception as e:
         logging.info(f"YouTube Transcript Exception: {str(e)}")
 
-    return (
-        "*COULD NOT FETCH THE VIDEO TRANSCRIPT FOR THE CHATBOT, WARN THE CHATBOT USER*"
-    )
+    return "<chatbot_error>could not fetch the video transcript for the chatbot, warn the chatbot user</chatbot_error>"
+
+
+def yt_get_video_info(url):
+    ydl_opts = {
+        "quiet": True,
+        # 'no_warnings': True,
+    }
+
+    # Create a YoutubeDL instance
+    with YoutubeDL(ydl_opts) as ydl:
+        # Extract video info
+        info = ydl.extract_info(url, download=False)
+
+        # Get the desired fields from the info dictionary
+        title = info["title"]
+        description = info["description"]
+        uploader = info["uploader"]
+
+        return title, description, uploader
 
 
 def yt_is_valid_url(url):
