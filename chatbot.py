@@ -560,7 +560,11 @@ async def message_handler(event):
                                         # Handle text content
                                         try:
                                             if flaresolverr_endpoint:
-                                                website_text = extract_content_with_flaresolverr(link)
+                                                website_text = (
+                                                    extract_content_with_flaresolverr(
+                                                        link
+                                                    )
+                                                )
                                                 extracted_text += f"<website_extracted_text_content>{website_text}</website_extracted_text_content>"
                                             else:
                                                 raise Exception(
@@ -582,9 +586,7 @@ async def message_handler(event):
                                                 )
                                         content = b"".join(content_chunks)
                                         soup = BeautifulSoup(content, "html.parser")
-                                        website_text = soup.get_text(
-                                            " | ", strip=True
-                                        )
+                                        website_text = soup.get_text(" | ", strip=True)
                                         extracted_text += f"<website_extracted_text_content>{website_text}</website_extracted_text_content>"
                             except Exception as e:
                                 logging.error(
@@ -689,12 +691,9 @@ def yt_get_video_info(url):
         # 'no_warnings': True,
     }
 
-    # Create a YoutubeDL instance
     with YoutubeDL(ydl_opts) as ydl:
-        # Extract video info
         info = ydl.extract_info(url, download=False)
 
-        # Get the desired fields from the info dictionary
         title = info["title"]
         description = info["description"]
         uploader = info["uploader"]
