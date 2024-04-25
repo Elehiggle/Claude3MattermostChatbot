@@ -68,6 +68,8 @@ For tasks requiring reasoning or math, use the Chain-of-Thought methodology to e
 Messages sent to you might contain XML tags, these XML tags are only sent to YOU exclusively for your own understanding. 
 A list of example XML tags that can be sent to you: <youtube_video_details> <url> <title> <description> <uploader> <transcript> <chatbot_error> 
 <website_data> <exception> <url_content> <file_data> <name> <file_content> <acknowledged> <username> 
+An example message from the user to you would be: <username>frank</username>hi 
+Your response message to this would NOT contain the above mentioned XML tags.
 If a user sends a link, use the extracted content provided in the XML tags, do not assume or make up stories based on the URL alone.
 If a user sends a YouTube link, primarily focus on the transcript and do not unnecessarily repeat the title, description or uploader of the video. 
 In your answer DO NOT contain the link to the video/website the user just provided to you as the user already knows it, unless the task requires it. 
@@ -156,16 +158,17 @@ def get_username_from_user_id(user_id):
         return f"Unknown_{user_id}"
 
 
-def ensure_alternating_roles(messages):
+def ensure_compliant_messages(messages):
+    # For Anthropic, messages must have alternating roles and the first message must always be a user role
     updated_messages = []
+
+    if messages[0]["role"] != "user":
+        updated_messages.append(construct_text_message(None, "user", "<acknowledged>"))
+
     for i, message in enumerate(messages):
         if i > 0 and message["role"] == messages[i - 1]["role"]:
-            updated_messages.append(
-                {
-                    "role": "assistant" if message["role"] == "user" else "user",
-                    "content": [{"type": "text", "text": "<acknowledged>"}],
-                }
-            )
+            updated_role = "assistant" if message["role"] == "user" else "user"
+            updated_messages.append(construct_text_message(None, updated_role, "<acknowledged>"))
         updated_messages.append(message)
     return updated_messages
 
@@ -303,6 +306,8 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
 def handle_generation(current_message, messages, channel_id, root_id):
     try:
         logger.info("Querying AI API")
+
+        messages = ensure_compliant_messages(messages)
 
         handle_text_generation(current_message, messages, channel_id, root_id)
     except Exception as e:

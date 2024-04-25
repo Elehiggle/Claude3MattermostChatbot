@@ -131,7 +131,6 @@ Also there is:
 
 - no fine granular control over certain settings (especially AI settings)
 - no CAPTCHA bypass
-- no image generation
 - no Vision API
 - no PDF parsing
 - no YouTube transcript fetching
