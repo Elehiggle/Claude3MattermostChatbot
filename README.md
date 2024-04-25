@@ -15,9 +15,9 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 ## Features
 
 - **Responds to messages** mentioning "@chatbot" (or rather the chatbot's username) or direct messages
-- **Extracts text content from links** shared in the messages. Also supports **FlareSolverr** to bypass
-  Javascript/CAPTCHA restrictions
-- Supports the **Vision API** for describing images provided as URLs within the chat message
+- Extracts **images, PDFs and other files** from message attachments and from **URL links** in messages
+- Supports **FlareSolverr** to bypass Javascript/CAPTCHA restrictions
+- Supports the **Vision API** for describing images. Images from PDFs will also be sent here.
 - **Gets transcripts of YouTube videos** for easy tl;dw summarizations. Title, description and uploader are also
   provided
 - Maintains context of the conversation within a thread
@@ -30,15 +30,14 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - Python 3.11 or just a server with [Docker](https://docs.docker.com/get-started/) _(you can get away with using 3.8 if
   you use datetime.datetime.utcnow() instead of datetime.datetime.now(datetime.UTC))_
 - Anthropic API key
-- Mattermost server with bot account token access or a dedicated user account
 - Mattermost Bot token (alternatively personal access token or login/password for a dedicated Mattermost user account for the chatbot)
 - The bot account needs to be added to the team and to the channels you want it to watch
 
 ## Installation
 
-1. Prepare a Mattermost bot account token and OpenAI API key
+1. Prepare a Mattermost bot account token and Anthropic API key
 
-    - Create an OpenAI API key [here](https://platform.openai.com/api-keys)
+    - Create an Anthropic API key [here](https://console.anthropic.com/settings/keys)
     - Create a Mattermost bot account token directly in the chat: _Left menu -> Integrations -> Bot accounts_. Give it
       the post:channels permission (this also suffices for DMs)
 
@@ -56,10 +55,10 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
     ```
    _or alternatively:_
     ```bash
-    python3.12 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp
+    python3.12 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF
     ```
 
-4. Set the following environment variables with your own values (most are optional):
+4. Set the following environment variables with your own values:
 
 | Parameter              | Description                                                                                                                                                                                              |
 |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -78,10 +77,11 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 | `AI_SYSTEM_PROMPT`            | The system prompt/instructions. Default: [click](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/d82b0dfc0065aa6c88ad2b2c4e6990252f20e247/chatbot.py#L47) (Subject to change. current_time and chatbot_username variables inside the prompt will be auto-formatted and substituted. |
 | `AI_TIMEOUT`                  | The timeout for the AI API call in seconds. Default: "120"                                                                                                                                                                                                                                     |
 | `MAX_TOKENS`                  | The maximum number of tokens to generate in the response. Default: "4096" (max)                                                                                                                                                                                                                |
-| `TEMPERATURE`                 | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                                                                                                                                                        |
-| `MAX_RESPONSE_SIZE_MB`        | The maximum size of the website content to extract (in megabytes). Default: "100"                                                                                                                                                                                                              |
-| `FLARESOLVERR_ENDPOINT`       | Endpoint URL to your [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) instance (eg. "http://192.168.1.55:8191/v1"). If you use this, MAX_RESPONSE_SIZE_MB won't be honored since it can't stream content                                                                           |
-| `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots to prevent endless loops)                                                                                                                                                                                      |
+| `TEMPERATURE`                 | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                                                                                                                                                        | |
+| `MAX_RESPONSE_SIZE_MB`        | The maximum size of the website or file content to extract (in megabytes, per URL/file). Default: "100"                                                                                                                                                                                        |
+| `FLARESOLVERR_ENDPOINT`       | Endpoint URL to your [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) instance (eg. "http://192.168.1.55:8191/v1"). If you use this, MAX_RESPONSE_SIZE_MB won't be honored since it can't stream content. For most effectiveness, use a residential IP endpoint                    |
+| `KEEP_ALL_URL_CONTENT`        | Whether to feed the AI all URL content from the whole conversation thread. The website result is cached in memory. If you only want it to know about the current message's URL content (due to context size or cost), set to "FALSE". Default: "TRUE"                                          |
+| `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots that are not real bot accounts to prevent endless loops). Supports multiple, separated by comma                                                                                                                |
 | `MATTERMOST_PORT`             | The port of your Mattermost server. Default: "443"                                                                                                                                                                                                                                             |
 | `MATTERMOST_SCHEME`           | The scheme of the connection. Default: "https"                                                                                                                                                                                                                                                 |
 | `MATTERMOST_BASEPATH`         | The basepath of your Mattermost server. Default: "/api/v4"                                                                                                                                                                                                                                     |
@@ -99,7 +99,9 @@ python3.12 chatbot.py
 ```
 
 The chatbot will connect to the Mattermost server and start listening for messages.
-When a user mentions the chatbot in a message or sends a direct message to the chatbot, the chatbot will process the message, extract text content from links (if any), handle image content using the Vision API, and send the response back to the Mattermost channel.
+When a user mentions the chatbot in a message or sends a direct message to the chatbot, the chatbot will process the
+message, extract content from links (if any), process images, PDFs and other files, handle image content using the
+Vision API, and send the response back to the Mattermost channel.
 
 > **Note:** If you don't trust your users at all, it's recommended to disable the URL/image grabbing feature, even though the chatbot filters out local addresses and IPs.
 
@@ -117,6 +119,27 @@ docker run -d --name chatbotclaude \
   -e TEMPERATURE="0.15" \
   ghcr.io/elehiggle/claude3mattermostchatbot:latest
 ```
+
+## How does this bot differ from the official Mattermost AI plugin?
+
+The official [Mattermost AI plugin](https://github.com/mattermost/mattermost-plugin-ai) is a great way to integrate AI
+into your Mattermost server with its own advantages, like a nice UI.
+However, the features differ greatly. It requires direct access to the server, whereas this bot merely needs a bot token
+and can be conveniently used in a Docker environment.
+
+Also there is:
+
+- no fine granular control over certain settings (especially AI settings)
+- no CAPTCHA bypass
+- no image generation
+- no Vision API
+- no PDF parsing
+- no YouTube transcript fetching
+- and more
+
+While the official plugin certainly will improve over time, this bot here will too and there will be certain features
+that will absolutely never make it into the official plugin, due to it primarily focusing on features for developers
+like function calling and retrieving GitHub issues, for example.
 
 ## Known Issues
 
@@ -148,3 +171,8 @@ This project is licensed under the MIT License.
 - [chatgpt-mattermost-bot](https://github.com/yGuy/chatgpt-mattermost-bot) for inspiring me to write this python code
 - [youtube-transcript-api](https://pypi.org/project/youtube-transcript-api/) for the YouTube Transcript Fetch library
 - [yt-dlp](https://pypi.org/project/yt-dlp/) for the YouTube API that allows us to fetch details
+- [PyMuPDF](https://pypi.org/project/PyMuPDF/) for the comprehensive PDF parsing library
+- [beautifulsoup4](https://pypi.org/project/beautifulsoup4/) for the HTML parsing library
+- [pillow](https://pypi.org/project/pillow/) for the image processing library
+- [httpx](https://pypi.org/project/httpx/) for the HTTP client library
+- [certifi](https://pypi.org/project/certifi/) for the certificate verification library
