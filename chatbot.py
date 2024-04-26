@@ -294,6 +294,9 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
         if block.type == "text":
             response_text += block.text
 
+    # Failsafe in case the response contains the username XML tag
+    response_text = re.sub(r"^<username>.*?</username>", "", response_text).strip()
+
     # Split the response into multiple messages if necessary
     response_parts = split_message(response_text)
 
