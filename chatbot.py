@@ -1045,6 +1045,12 @@ def request_link_text_content(link, prev_response):
         soup = BeautifulSoup(raw_content, "html.parser")
         website_content = soup.get_text(" | ", strip=True)
 
+    # Replace with a tokenizer once there is one for latest Anthropic models
+    if len(website_content) > 1_000_000:
+        logger.debug("Website text content too large, trying to extract article content only")
+        article_texts = [article.get_text(" | ", strip=True) for article in soup.find_all('article')]
+        website_content = " | ".join(article_texts)
+
     if not website_content:
         raise Exception("No text content found on website")
 
