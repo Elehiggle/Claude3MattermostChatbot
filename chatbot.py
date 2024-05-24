@@ -149,8 +149,7 @@ tools = [
                     "default": 15,
                     "max": 20
                 }
-            },
-            "required": []
+            }
         }
     },
     {
@@ -434,9 +433,8 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             tool_messages.append(func_response)
         else:
             func_response = {
-                "tool_call_id": call.id,
-                "role": "tool",
-                "name": call.function.name,
+                "type": "tool_result",
+                "tool_use_id": call.id,
                 "content": "You hallucinated this function call, it does not exist",
             }
 
