@@ -391,44 +391,54 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
 
         if call.name == "get_stock_ticker_data":
             arguments = call.input
-            ticket_symbol = arguments["ticker_symbol"]
-            stock_data = get_stock_ticker_data(ticket_symbol)
+            data, is_error = wrapper_function_call(get_stock_ticker_data, arguments)
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(stock_data),
+                "content": json.dumps(data),
             }
+
+            if is_error:
+                func_response["is_error"] = True
 
             tool_messages.append(func_response)
         elif call.name == "get_cryptocurrency_data_by_market_cap":
             arguments = call.input
-            num_currencies = arguments["num_currencies"] if "num_currencies" in arguments else 15
-            crypto_data = get_cryptocurrency_data_by_market_cap(num_currencies)
+            data, is_error = wrapper_function_call(get_cryptocurrency_data_by_market_cap, arguments)
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(crypto_data),
+                "content": json.dumps(data),
             }
+
+            if is_error:
+                func_response["is_error"] = True
 
             tool_messages.append(func_response)
         elif call.name == "get_cryptocurrency_data_by_id":
             arguments = call.input
-            crypto_id = arguments["crypto_id"]
-            crypto_data = get_cryptocurrency_data_by_id(crypto_id)
+            data, is_error = wrapper_function_call(get_cryptocurrency_data_by_id, arguments)
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(crypto_data),
+                "content": json.dumps(data),
             }
+
+            if is_error:
+                func_response["is_error"] = True
 
             tool_messages.append(func_response)
         elif call.name == "get_exchange_rates":
-            exchange_rates = get_exchange_rates()
+            arguments = call.input
+            data, is_error = wrapper_function_call(get_exchange_rates, arguments)
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(exchange_rates),
+                "content": json.dumps(data),
             }
+
+            if is_error:
+                func_response["is_error"] = True
 
             tool_messages.append(func_response)
         else:
@@ -436,6 +446,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
                 "type": "tool_result",
                 "tool_use_id": call.id,
                 "content": "You hallucinated this function call, it does not exist",
+                "is_error": True
             }
 
             tool_messages.append(func_response)
@@ -500,8 +511,21 @@ def handle_generation(current_message, messages, channel_id, root_id):
         driver.posts.create_post({"channel_id": channel_id, "message": f"Error occurred: {str(e)}", "root_id": root_id})
 
 
+def wrapper_function_call(func, call_input_arguments, *args, **kwargs):
+    try:
+        result = func(json.dumps(call_input_arguments), *args, **kwargs)  # JSON to make it cachable
+    except Exception as e:
+        logger.error(f"Error calling function call function: {str(e)} {traceback.format_exc()}")
+        result = f"An error occurred: {str(e)}"
+        return result, True
+    return result, False
+
+
 @timed_lru_cache(seconds=300, maxsize=100)
-def get_stock_ticker_data(ticker_symbol):
+def get_stock_ticker_data(arguments):
+    arguments = json.loads(arguments)
+    ticker_symbol = arguments["ticker_symbol"]
+
     stock = yfinance.Ticker(ticker_symbol)
 
     stock_data = {
@@ -519,7 +543,7 @@ def get_stock_ticker_data(ticker_symbol):
 
 
 @timed_lru_cache(seconds=7200, maxsize=100)
-def get_exchange_rates():
+def get_exchange_rates(_arguments):
     ecb_url = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 
     with httpx.Client() as client:
@@ -541,7 +565,9 @@ def get_exchange_rates():
 
 
 @timed_lru_cache(seconds=180, maxsize=100)
-def get_cryptocurrency_data_by_market_cap(num_currencies):
+def get_cryptocurrency_data_by_market_cap(arguments):
+    arguments = json.loads(arguments)
+    num_currencies = arguments["num_currencies"] if "num_currencies" in arguments else 15
     num_currencies = min(num_currencies, 20)  # Limit to 20
 
     url = "https://api.coingecko.com/api/v3/coins/markets"  # possible alternatives: coincap.io, mobula.io
@@ -563,8 +589,9 @@ def get_cryptocurrency_data_by_market_cap(num_currencies):
 
 
 @timed_lru_cache(seconds=180, maxsize=100)
-def get_cryptocurrency_data_by_id(crypto_id):
-    crypto_id = crypto_id.lower()
+def get_cryptocurrency_data_by_id(arguments):
+    arguments = json.loads(arguments)
+    crypto_id = arguments["crypto_id"].lower()
 
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
