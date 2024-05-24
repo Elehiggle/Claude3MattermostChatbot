@@ -9,12 +9,16 @@ import datetime
 import logging
 import concurrent.futures
 import base64
-from functools import lru_cache
+from time import monotonic_ns
+from functools import lru_cache, wraps
 from io import BytesIO
+from defusedxml import ElementTree
+import yfinance
 import certifi
 
 # noinspection PyPackageRequirements
 import fitz
+import pymupdf4llm
 import httpx
 from PIL import Image
 from mattermostdriver.driver import Driver
@@ -22,7 +26,6 @@ from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
 from yt_dlp import YoutubeDL
 from anthropic import Anthropic
-from helpers.pymupdf_rag import to_markdown
 
 log_level_root = os.getenv("LOG_LEVEL_ROOT", "INFO").upper()
 logging.basicConfig(level=log_level_root)
@@ -51,6 +54,40 @@ def cdc(*args, **kwargs):
 # monkey patching ssl.create_default_context to fix SSL error
 ssl.create_default_context = cdc
 
+
+def timed_lru_cache(_func=None, *, seconds: int = 600, maxsize: int = 128, typed: bool = False):
+    """Extension of functools lru_cache with a timeout
+
+    Parameters:
+    seconds (int): Timeout in seconds to clear the WHOLE cache, default = 10 minutes
+    maxsize (int): Maximum Size of the Cache
+    typed (bool): Same value of different type will be a different entry
+
+    """
+
+    def wrapper_cache(f):
+        f = lru_cache(maxsize=maxsize, typed=typed)(f)
+        f.delta = seconds * 10 ** 9
+        f.expiration = monotonic_ns() + f.delta
+
+        @wraps(f)
+        def wrapped_f(*args, **kwargs):
+            if monotonic_ns() >= f.expiration:
+                f.cache_clear()
+                f.expiration = monotonic_ns() + f.delta
+            return f(*args, **kwargs)
+
+        wrapped_f.cache_info = f.cache_info
+        wrapped_f.cache_clear = f.cache_clear
+        return wrapped_f
+
+    # To allow decorator to be used without arguments
+    if _func is None:
+        return wrapper_cache
+
+    return wrapper_cache(_func)
+
+
 # AI parameters
 api_key = os.environ["AI_API_KEY"]
 model = os.getenv("AI_MODEL", "claude-3-opus-20240229")
@@ -77,6 +114,61 @@ If your response contains any URLs, make sure to properly escape them using Mark
 If an error occurs, provide the information from the <chatbot_error> tag to the user along with your answer.""",
 )
 
+tools = [
+    {
+        "name": "get_exchange_rates",
+        "description": "Retrieve the latest exchange rates from the ECB, base currency: EUR",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        }
+    },
+    {
+        "name": "get_cryptocurrency_data_by_id",
+        "description": "Fetches cryptocurrency data by ID (ex. ethereum) or symbol (ex. BTC)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "crypto_id": {
+                    "type": "string",
+                    "description": "The identifier or symbol of the cryptocurrency"
+                }
+            },
+            "required": ["crypto_id"]
+        }
+    },
+    {
+        "name": "get_cryptocurrency_data_by_market_cap",
+        "description": "Fetches cryptocurrency data for the top N currencies by market cap",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "num_currencies": {
+                    "type": "integer",
+                    "description": "The number of top cryptocurrencies to retrieve. Optional",
+                    "default": 15,
+                    "max": 20
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_stock_ticker_data",
+        "description": "Retrieves information about a specified company from the stock market",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker_symbol": {
+                    "type": "string",
+                    "description": "The stock ticker symbol of the company (ex. AAPL)"
+                }
+            },
+            "required": ["ticker_symbol"]
+        }
+    }
+]
+
 # Mattermost server details
 mattermost_url = os.environ["MATTERMOST_URL"]
 mattermost_scheme = os.getenv("MATTERMOST_SCHEME", "https")
@@ -97,8 +189,8 @@ max_response_size = 1024 * 1024 * int(os.getenv("MAX_RESPONSE_SIZE_MB", "100"))
 keep_all_url_content = os.getenv("KEEP_ALL_URL_CONTENT", "TRUE").upper() == "TRUE"
 
 # For filtering local links
-regex_local_links = (
-    r"(?:127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|::1|(?<![:.\w])[fF][cCdD](?![:.\w])|localhost)"
+REGEX_LOCAL_LINKS = (
+    r"(?:^|\b)(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|::1|[fF][cCdD]00::|\blocalhost\b)(?:$|\b)"
 )
 
 # Create a driver instance
@@ -117,8 +209,8 @@ driver = Driver(
 )
 
 # Chatbot account username, automatically fetched
-chatbot_username = ""
-chatbot_username_at = ""
+CHATBOT_USERNAME = ""
+CHATBOT_USERNAME_AT = ""
 
 # Create an AI client instance
 ai_client = Anthropic(api_key=api_key, base_url=ai_api_baseurl)
@@ -136,7 +228,7 @@ compatible_image_content_types = [
 
 def get_system_instructions():
     current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    return system_prompt_unformatted.format(current_time=current_time, chatbot_username=chatbot_username)
+    return system_prompt_unformatted.format(current_time=current_time, CHATBOT_USERNAME=CHATBOT_USERNAME)
 
 
 @lru_cache(maxsize=1000)
@@ -278,24 +370,116 @@ def split_message(msg, max_length=4000):
 
 def handle_text_generation(current_message, messages, channel_id, root_id):
     # Send the messages to the AI API
-    response = ai_client.messages.create(
+    response = ai_client.beta.tools.messages.create(
         model=model,
         max_tokens=max_tokens,
         system=get_system_instructions(),
         messages=messages,
         timeout=timeout,
         temperature=temperature,
+        tools=tools,
+        tool_choice={"type": "auto"},  # Let model decide to call the function or not
     )
 
-    # Extract the text content from the ContentBlock object
-    content_blocks = response.content
+    initial_message_response = response.content
+
+    tool_messages = []
+
+    # Check if tool calls are present in the response
+    for index, call in enumerate((block for block in initial_message_response if block.type == "tool_use")):
+        if index >= 15:  # Limit the number of function calls
+            raise Exception("Maximum amount of function calls reached")
+
+        if call.name == "get_stock_ticker_data":
+            arguments = call.input
+            ticket_symbol = arguments["ticker_symbol"]
+            stock_data = get_stock_ticker_data(ticket_symbol)
+            func_response = {
+                "type": "tool_result",
+                "tool_use_id": call.id,
+                "content": json.dumps(stock_data),
+            }
+
+            tool_messages.append(func_response)
+        elif call.name == "get_cryptocurrency_data_by_market_cap":
+            arguments = call.input
+            num_currencies = arguments["num_currencies"] if "num_currencies" in arguments else 15
+            crypto_data = get_cryptocurrency_data_by_market_cap(num_currencies)
+            func_response = {
+                "type": "tool_result",
+                "tool_use_id": call.id,
+                "content": json.dumps(crypto_data),
+            }
+
+            tool_messages.append(func_response)
+        elif call.name == "get_cryptocurrency_data_by_id":
+            arguments = call.input
+            crypto_id = arguments["crypto_id"]
+            crypto_data = get_cryptocurrency_data_by_id(crypto_id)
+            func_response = {
+                "type": "tool_result",
+                "tool_use_id": call.id,
+                "content": json.dumps(crypto_data),
+            }
+
+            tool_messages.append(func_response)
+        elif call.name == "get_exchange_rates":
+            exchange_rates = get_exchange_rates()
+            func_response = {
+                "type": "tool_result",
+                "tool_use_id": call.id,
+                "content": json.dumps(exchange_rates),
+            }
+
+            tool_messages.append(func_response)
+        else:
+            func_response = {
+                "tool_call_id": call.id,
+                "role": "tool",
+                "name": call.function.name,
+                "content": "You hallucinated this function call, it does not exist",
+            }
+
+            tool_messages.append(func_response)
+
+    # Requery in case there are new messages from function calls
+    if tool_messages:
+        # Add the initial response to the messages array as it contains infos about tool calls
+        messages.append({"role": "assistant", "content": initial_message_response})
+
+        # Construct the final func_response using the accumulated result blocks
+        messages.append({"role": "user", "content": tool_messages})
+
+        response = ai_client.beta.tools.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=get_system_instructions(),
+            messages=messages,
+            timeout=timeout,
+            temperature=temperature,
+            tools=tools,
+            tool_choice={"type": "auto"},  # Set to none if and when they support it
+        )
+
+    text_block_exists = any(
+        content_block.type == "text"
+        for content_block in response.content
+    )
+
+    if not text_block_exists:
+        raise Exception("Empty AI response, likely API error or mishandling")
+
     response_text = ""
-    for block in content_blocks:
-        if block.type == "text":
-            response_text += block.text
+
+    for content_block in response.content:
+        if content_block.type == "text":
+            response_text += content_block.text
 
     # Failsafe in case the response contains the username XML tag
-    response_text = re.sub(r"^<username>.*?</username>", "", response_text).strip()
+    response_text = re.sub(r"<username>.*?</username>", "", response_text, flags=re.DOTALL).strip()
+
+    # Remove Chain-of-Thought XML tags added by the model due to tools usage, pray they change this one day
+    response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL).strip()
 
     # Split the response into multiple messages if necessary
     response_parts = split_message(response_text)
@@ -316,6 +500,95 @@ def handle_generation(current_message, messages, channel_id, root_id):
     except Exception as e:
         logger.error(f"Error: {str(e)} {traceback.format_exc()}")
         driver.posts.create_post({"channel_id": channel_id, "message": f"Error occurred: {str(e)}", "root_id": root_id})
+
+
+@timed_lru_cache(seconds=300, maxsize=100)
+def get_stock_ticker_data(ticker_symbol):
+    stock = yfinance.Ticker(ticker_symbol)
+
+    stock_data = {
+        "info": str(stock.info),
+        "calendar": str(stock.calendar),
+        "news": str(stock.news),
+        "dividends": str(stock.dividends),
+        "splits": str(stock.splits),
+        "quarterly_financials": str(stock.quarterly_financials),
+        "financials": str(stock.financials),
+        "cashflow": str(stock.cashflow),
+    }
+
+    return json.dumps(stock_data)
+
+
+@timed_lru_cache(seconds=7200, maxsize=100)
+def get_exchange_rates():
+    ecb_url = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
+
+    with httpx.Client() as client:
+        response = client.get(ecb_url, timeout=4)
+        response.raise_for_status()
+
+        root = ElementTree.fromstring(response.content)
+        namespace = {
+            "gesmes": "http://www.gesmes.org/xml/2002-08-01",
+            "ecb": "http://www.ecb.int/vocabulary/2002-08-01/eurofxref",
+        }
+
+        rates = root.find(".//ecb:Cube/ecb:Cube", namespaces=namespace)
+        exchange_rates = {"base_currency": "EUR"}
+        for rate in rates.findall("ecb:Cube", namespaces=namespace):
+            exchange_rates[rate.get("currency")] = rate.get("rate")
+
+        return exchange_rates
+
+
+@timed_lru_cache(seconds=180, maxsize=100)
+def get_cryptocurrency_data_by_market_cap(num_currencies):
+    num_currencies = min(num_currencies, 20)  # Limit to 20
+
+    url = "https://api.coingecko.com/api/v3/coins/markets"  # possible alternatives: coincap.io, mobula.io
+    params = {
+        "vs_currency": "usd",
+        "order": "market_cap_desc",
+        "per_page": num_currencies,
+        "page": 1,
+        "sparkline": "false",
+        "price_change_percentage": "24h,7d",
+    }
+
+    with httpx.Client() as client:
+        response = client.get(url, timeout=15, params=params)
+        response.raise_for_status()
+
+        data = response.json()
+        return data
+
+
+@timed_lru_cache(seconds=180, maxsize=100)
+def get_cryptocurrency_data_by_id(crypto_id):
+    crypto_id = crypto_id.lower()
+
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        "vs_currency": "usd",
+        "order": "market_cap_desc",
+        "per_page": 500,
+        "page": 1,
+        "sparkline": "false",
+        "price_change_percentage": "24h,7d",
+    }
+
+    with httpx.Client() as client:
+        response = client.get(url, timeout=15, params=params)
+        response.raise_for_status()
+
+        data = response.json()
+        # Filter data to find the cryptocurrency with the matching id or symbol
+        matched_crypto = next((item for item in data if crypto_id in (item["id"], item["symbol"])), None)
+        if matched_crypto:
+            return matched_crypto
+
+        return {"error": "No data found for the specified cryptocurrency ID/symbol."}
 
 
 def process_message(event_data):
@@ -369,7 +642,7 @@ def process_message(event_data):
                 image_messages = []
 
                 for link in links:
-                    if re.search(regex_local_links, link):
+                    if re.search(REGEX_LOCAL_LINKS, link):
                         logger.info(f"Skipping local URL: {link}")
                         continue
 
@@ -430,7 +703,7 @@ def should_ignore_post(post):
 
 def extract_post_data(post, event_data):
     # Remove the "@chatbot" mention from the message
-    message = post["message"].replace(chatbot_username_at, "").strip()
+    message = post["message"].replace(CHATBOT_USERNAME_AT, "").strip()
     channel_id = post["channel_id"]
     sender_name = sanitize_username(event_data["data"]["sender_name"])
     root_id = post["root_id"]
@@ -480,7 +753,7 @@ def get_thread_posts(root_id, post_id):
     sorted_posts = sorted(thread["posts"].values(), key=lambda x: x["create_at"])
     for thread_post in sorted_posts:
         thread_sender_name = get_username_from_user_id(thread_post["user_id"])
-        thread_message = thread_post["message"].replace(chatbot_username_at, "").strip()
+        thread_message = thread_post["message"].replace(CHATBOT_USERNAME_AT, "").strip()
         role = "assistant" if thread_post["user_id"] == driver.client.userid else "user"
         messages.append((thread_post, thread_sender_name, role, thread_message))
         if thread_post["id"] == post_id:
@@ -491,7 +764,7 @@ def get_thread_posts(root_id, post_id):
 
 def is_chatbot_invoked(post, post_id, root_id, channel_display_name):
     # We directly access the message here as we filter the mention earlier
-    if chatbot_username_at in post["message"]:
+    if CHATBOT_USERNAME_AT in post["message"]:
         return True
 
     # It is a direct message
@@ -506,7 +779,7 @@ def is_chatbot_invoked(post, post_id, root_id, channel_display_name):
                 return True
 
             # Needed when you mention the chatbot and send a fast message afterward
-            if chatbot_username_at in thread_post["message"]:
+            if CHATBOT_USERNAME_AT in thread_post["message"]:
                 return True
 
     return False
@@ -542,7 +815,7 @@ def extract_pdf_content(stream):
     image_messages = []
 
     with fitz.open(None, stream, "pdf") as pdf:
-        pdf_text_content += to_markdown(pdf).strip()
+        pdf_text_content += pymupdf4llm.to_markdown(pdf).strip()
 
         for page in pdf:
             # Extract images
@@ -701,7 +974,7 @@ def request_flaresolverr(link):
         "url": link,
         "maxTimeout": 30000,
     }
-    response = httpx.post(flaresolverr_endpoint, json=payload)
+    response = httpx.post(flaresolverr_endpoint, json=payload, timeout=30.0)
     response.raise_for_status()
     data = response.json()
 
@@ -739,6 +1012,14 @@ def request_link_text_content(link, prev_response):
     soup = BeautifulSoup(raw_content, "html.parser")
     website_content = soup.get_text(" | ", strip=True)
 
+    if website_content == "New Tab":
+        logger.debug(
+            "Website content is 'New Tab', retrying with HTTPX."
+        )  # FlareSolverr issue I haven't figured out yet, happens with direct .CSV files for example
+        raw_content = request_httpx(prev_response)
+        soup = BeautifulSoup(raw_content, "html.parser")
+        website_content = soup.get_text(" | ", strip=True)
+
     if not website_content:
         raise Exception("No text content found on website")
 
@@ -764,7 +1045,7 @@ def request_link_image_content(prev_response, content_type):
     return [construct_image_content_message(content_type, image_data_base64)]
 
 
-@lru_cache(maxsize=100)
+@timed_lru_cache(seconds=1800, maxsize=100)
 def request_link_content(link):
     if yt_is_valid_url(link):
         return yt_get_content(link), []
@@ -774,7 +1055,7 @@ def request_link_content(link):
         with client.stream("GET", link, timeout=4, follow_redirects=True) as response:
             final_url = str(response.url)
 
-            if re.search(regex_local_links, final_url):
+            if re.search(REGEX_LOCAL_LINKS, final_url):
                 logger.info(f"Skipping local URL after redirection: {final_url}")
                 raise Exception("Local URL is disallowed")
 
@@ -873,9 +1154,9 @@ def main():
     try:
         # Log in to the Mattermost server
         driver.login()
-        global chatbot_username, chatbot_username_at
-        chatbot_username = driver.client.username
-        chatbot_username_at = f"@{chatbot_username}"
+        global CHATBOT_USERNAME, CHATBOT_USERNAME_AT
+        CHATBOT_USERNAME = driver.client.username
+        CHATBOT_USERNAME_AT = f"@{CHATBOT_USERNAME}"
 
         logger.debug(f"SYSTEM PROMPT: {get_system_instructions()}")
 
