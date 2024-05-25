@@ -102,16 +102,11 @@ You are a helpful assistant used in a Mattermost chat. The current UTC time is {
 Whenever users asks you for help you will provide them with succinct answers formatted using Markdown. Do not unnecessarily greet people with their name, 
 do not be apologetic. 
 For tasks requiring reasoning or math, use the Chain-of-Thought methodology to explain your step-by-step calculations or logic before presenting your answer. 
-Messages sent to you might contain XML tags, these XML tags are only sent to YOU exclusively for your own understanding. 
-A list of example XML tags that can be sent to you: <youtube_video_details> <url> <title> <description> <uploader> <transcript> <chatbot_error> 
-<website_data> <exception> <url_content> <file_data> <name> <file_content> <acknowledged> <username> 
-An example message from the user to you would be: <username>frank</username>hi 
-Your response message to this would NOT contain the above mentioned XML tags.
-If a user sends a link, use the extracted content provided in the XML tags, do not assume or make up stories based on the URL alone.
+Objects sent to you are structured in JSON, which includes the message of the user, and might include file data, website data, and more. Do not reply in a JSON-object format. 
+If a user sends a link, use the extracted URL content provided, do not assume or make up stories based on the URL alone. 
 If a user sends a YouTube link, primarily focus on the transcript and do not unnecessarily repeat the title, description or uploader of the video. 
 In your answer DO NOT contain the link to the video/website the user just provided to you as the user already knows it, unless the task requires it. 
-If your response contains any URLs, make sure to properly escape them using Markdown syntax for display purposes.
-If an error occurs, provide the information from the <chatbot_error> tag to the user along with your answer.""",
+If your response contains any URLs, make sure to properly escape them using Markdown syntax for display purposes.""",
 )
 
 tools = [
@@ -121,7 +116,7 @@ tools = [
         "input_schema": {
             "type": "object",
             "properties": {},
-        }
+        },
     },
     {
         "name": "get_cryptocurrency_data_by_id",
@@ -129,13 +124,10 @@ tools = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "crypto_id": {
-                    "type": "string",
-                    "description": "The identifier or symbol of the cryptocurrency"
-                }
+                "crypto_id": {"type": "string", "description": "The identifier or symbol of the cryptocurrency"}
             },
-            "required": ["crypto_id"]
-        }
+            "required": ["crypto_id"],
+        },
     },
     {
         "name": "get_cryptocurrency_data_by_market_cap",
@@ -147,10 +139,10 @@ tools = [
                     "type": "integer",
                     "description": "The number of top cryptocurrencies to retrieve. Optional",
                     "default": 15,
-                    "max": 20
+                    "max": 20,
                 }
-            }
-        }
+            },
+        },
     },
     {
         "name": "get_stock_ticker_data",
@@ -158,14 +150,11 @@ tools = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker_symbol": {
-                    "type": "string",
-                    "description": "The stock ticker symbol of the company (ex. AAPL)"
-                }
+                "ticker_symbol": {"type": "string", "description": "The stock ticker symbol of the company (ex. AAPL)"}
             },
-            "required": ["ticker_symbol"]
-        }
-    }
+            "required": ["ticker_symbol"],
+        },
+    },
 ]
 
 # Mattermost server details
@@ -253,30 +242,30 @@ def ensure_compliant_messages(messages):
     # For Anthropic, messages must have alternating roles and the first message must always be a user role
     updated_messages = []
 
+    acknowledged_content = {"acknowledged": True}
+
     if messages[0]["role"] != "user":
-        updated_messages.append(construct_text_message(None, "user", "<acknowledged>"))
+        updated_messages.append(construct_text_message(None, "user", acknowledged_content))
 
     for i, message in enumerate(messages):
         if i > 0 and message["role"] == messages[i - 1]["role"]:
             updated_role = "assistant" if message["role"] == "user" else "user"
-            updated_messages.append(construct_text_message(None, updated_role, "<acknowledged>"))
+            updated_messages.append(construct_text_message(None, updated_role, acknowledged_content))
         updated_messages.append(message)
     return updated_messages
 
 
-def send_typing_indicator(user_id, channel_id, parent_id):
-    """Send a "typing" indicator to show that work is in progress."""
-    options = {
-        "channel_id": channel_id,
-        # "parent_id": parent_id  # somehow bugged/doesnt work
-    }
-    driver.client.make_request("post", f"/users/{user_id}/typing", options=options)  # id may be substituted with "me"
-
-
 def send_typing_indicator_loop(user_id, channel_id, parent_id, stop_event):
+    """Send a "typing" indicator to show that work is in progress."""
     while not stop_event.is_set():
         try:
-            send_typing_indicator(user_id, channel_id, parent_id)
+            options = {
+                "channel_id": channel_id,
+                # "parent_id": parent_id  # somehow bugged/doesnt work
+            }
+            driver.client.make_request(
+                "post", f"/users/{user_id}/typing", options=options
+            )  # id may be substituted with "me"
             time.sleep(1)
         except Exception as e:
             logger.error(f"Error sending busy indicator: {str(e)} {traceback.format_exc()}")
@@ -386,7 +375,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
 
     # Check if tool calls are present in the response
     for index, call in enumerate((block for block in initial_message_response if block.type == "tool_use")):
-        if index >= 15:  # Limit the number of function calls
+        if index >= 15:
             raise Exception("Maximum amount of function calls reached")
 
         if call.name == "get_stock_ticker_data":
@@ -446,7 +435,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
                 "type": "tool_result",
                 "tool_use_id": call.id,
                 "content": "You hallucinated this function call, it does not exist",
-                "is_error": True
+                "is_error": True,
             }
 
             tool_messages.append(func_response)
@@ -470,10 +459,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             tool_choice={"type": "auto"},  # Set to none if and when they support it
         )
 
-    text_block_exists = any(
-        content_block.type == "text"
-        for content_block in response.content
-    )
+    text_block_exists = any(content_block.type == "text" for content_block in response.content)
 
     if not text_block_exists:
         raise Exception("Empty AI response, likely API error or mishandling")
@@ -483,9 +469,6 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
     for content_block in response.content:
         if content_block.type == "text":
             response_text += content_block.text
-
-    # Failsafe in case the response contains the username XML tag
-    response_text = re.sub(r"<username>.*?</username>", "", response_text, flags=re.DOTALL).strip()
 
     # Remove Chain-of-Thought XML tags added by the model due to tools usage, pray they change this one day
     response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL).strip()
@@ -539,7 +522,7 @@ def get_stock_ticker_data(arguments):
         "cashflow": str(stock.cashflow),
     }
 
-    return json.dumps(stock_data)
+    return stock_data
 
 
 @timed_lru_cache(seconds=7200, maxsize=100)
@@ -613,7 +596,7 @@ def get_cryptocurrency_data_by_id(arguments):
         if matched_crypto:
             return matched_crypto
 
-        return {"error": "No data found for the specified cryptocurrency ID/symbol."}
+        return "No data found for the specified cryptocurrency ID/symbol"
 
 
 def process_message(event_data):
@@ -649,21 +632,25 @@ def process_message(event_data):
                 thread_messages.append((post, sender_name, "user", current_message))
 
             for index, thread_message in enumerate(thread_messages):
+                content = {}
+
                 thread_post, thread_sender_name, thread_role, thread_message_text = thread_message
 
                 # We don't want to extract information from links the assistant sent
                 if thread_role == "assistant":
-                    messages.append(construct_text_message(thread_sender_name, thread_role, thread_message_text))
+                    content["message"] = thread_message_text
+                    messages.append(construct_text_message(thread_sender_name, thread_role, content))
                     continue
 
                 # If keep content is disabled, we will skip the remaining code to grab content unless its the last message
                 is_last_message = index == len(thread_messages) - 1
                 if not keep_all_url_content and not is_last_message:
-                    messages.append(construct_text_message(thread_sender_name, "user", thread_message_text))
+                    content["message"] = thread_message_text
+                    messages.append(construct_text_message(thread_sender_name, thread_role, content))
                     continue
 
                 links = re.findall(r"(https?://\S+)", thread_message_text, re.IGNORECASE)  # Allow http and https links
-                website_content_all = ""
+                content["website_data"] = []
                 image_messages = []
 
                 for link in links:
@@ -671,27 +658,36 @@ def process_message(event_data):
                         logger.info(f"Skipping local URL: {link}")
                         continue
 
-                    website_content = ""
+                    website_data = {
+                        "url": link,
+                    }
 
                     try:
-                        website_content, link_image_messages = request_link_content(link)
+                        website_data["url_content"], link_image_messages = request_link_content(link)
                         image_messages.extend(link_image_messages)
                     except Exception as e:
                         logger.error(f"Error extracting content from link {link}: {str(e)} {traceback.format_exc()}")
-                        website_content = f"<chatbot_error>fetching website caused an exception, warn the chatbot user<exception>{str(e)}</exception></chatbot_error>"
+                        website_data["error"] = f"fetching website caused an exception, warn the chatbot user: {str(e)}"
                     finally:
-                        if website_content:
-                            website_content_all += f"<website_data><url>{link}</url><url_content>{website_content}</url_content></website_data>"
+                        content["website_data"].append(website_data)
 
                 files_text_content, files_image_messages = get_files_content(thread_post)
                 image_messages.extend(files_image_messages)
 
-                content = f"{files_text_content}{website_content_all}{thread_message_text}"
+                if files_text_content:
+                    content["file_data"] = files_text_content
+                if not content["website_data"]:
+                    del content["website_data"]
+
+                content["message"] = thread_message_text
 
                 if image_messages:
-                    image_messages.append(
-                        {"type": "text", "text": f"<username>{thread_sender_name}</username>{content}"}
-                    )
+                    image_text_content = {
+                        "username": thread_sender_name,
+                        "message": content,
+                    }
+
+                    image_messages.append({"type": "text", "text": json.dumps(image_text_content)})
                     messages.append({"role": "user", "content": image_messages})
                 else:
                     messages.append(construct_text_message(thread_sender_name, "user", content))
@@ -701,10 +697,10 @@ def process_message(event_data):
     except Exception as e:
         logger.error(f"Error inner message handler: {str(e)} {traceback.format_exc()}")
     finally:
-        get_raw_thread_posts.cache_clear()
-        if stop_typing_event is not None:
+        get_raw_thread_posts.cache_clear()  # We clear this cache as it won't be useful for the next message with the current implementation
+        if stop_typing_event:
             stop_typing_event.set()
-        if typing_indicator_thread is not None:
+        if typing_indicator_thread:
             typing_indicator_thread.join()
 
 
@@ -738,17 +734,17 @@ def extract_post_data(post, event_data):
 
 
 def construct_text_message(name, role, message):
-    message = {
+    message["username"] = name
+
+    return {
         "role": role,
         "content": [
             {
                 "type": "text",
-                "text": f"<username>{name}</username>{message}",
+                "text": json.dumps(message),
             }
         ],
     }
-
-    return message
 
 
 def construct_image_content_message(content_type, image_data_base64):
@@ -832,7 +828,8 @@ def get_file_content(file_details_json):
     if content_type == "application/pdf":
         return extract_pdf_content(file.content)
 
-    return file.content, image_messages
+    # Return other files simply as string
+    return str(file.content), image_messages
 
 
 def extract_pdf_content(stream):
@@ -859,7 +856,7 @@ def extract_pdf_content(stream):
 
 
 def get_files_content(post):
-    files_text_content_all = ""
+    files_text_content_all = {}
     image_messages = []
 
     try:
@@ -867,13 +864,13 @@ def get_files_content(post):
             metadata = post["metadata"]
             if "files" in metadata and metadata["files"]:
                 metadata_files = metadata["files"]
-                files_text_content_all = ""
 
                 for file_details in metadata_files:
                     file_name = file_details["name"]
-                    file_text_content = ""
+                    files_text_content_all[file_name] = {}
+
                     try:
-                        file_text_content, file_image_messages = get_file_content(
+                        files_text_content_all[file_name]["file_content"], file_image_messages = get_file_content(
                             json.dumps(file_details)
                         )  # JSON to make it cachable
                         image_messages.extend(file_image_messages)
@@ -881,10 +878,9 @@ def get_files_content(post):
                         logger.error(
                             f"Error extracting content from file {file_name}: {str(e)} {traceback.format_exc()}"
                         )
-                        file_text_content = f"<chatbot_error>fetching file content caused an exception, warn the chatbot user<exception>{str(e)}</exception></chatbot_error>"
-                    finally:
-                        if file_text_content:
-                            files_text_content_all += f"<file_data><name>{file_name}</name><file_content>{file_text_content}</file_content></file_data>"
+                        files_text_content_all[file_name][
+                            "error"
+                        ] = f"fetching file content caused an exception, warn the chatbot user: {str(e)}"
     except Exception as e:
         logger.error(f"Error get_files_content: {str(e)} {traceback.format_exc()}")
 
@@ -983,14 +979,14 @@ def yt_is_valid_url(url):
 def yt_get_content(link):
     transcript = yt_get_transcript(link)
     title, description, uploader = yt_get_video_info(link)
-    return f"""
-    <youtube_video_details>
-        <title>{title}</title>
-        <description>{description}</description>
-        <uploader>{uploader}</uploader>
-        <transcript>{transcript}</transcript>
-    </youtube_video_details>
-    """
+    return {
+        "youtube_video_details": {
+            "title": title,
+            "description": description,
+            "uploader": uploader,
+            "transcript": transcript,
+        }
+    }
 
 
 def request_flaresolverr(link):
@@ -1048,7 +1044,7 @@ def request_link_text_content(link, prev_response):
     # Replace with a tokenizer once there is one for latest Anthropic models
     if len(website_content) > 1_000_000:
         logger.debug("Website text content too large, trying to extract article content only")
-        article_texts = [article.get_text(" | ", strip=True) for article in soup.find_all('article')]
+        article_texts = [article.get_text(" | ", strip=True) for article in soup.find_all("article")]
         website_content = " | ".join(article_texts)
 
     if not website_content:
