@@ -176,6 +176,8 @@ max_response_size = 1024 * 1024 * int(os.getenv("MAX_RESPONSE_SIZE_MB", "100"))
 
 keep_all_url_content = os.getenv("KEEP_ALL_URL_CONTENT", "TRUE").upper() == "TRUE"
 
+tool_use_enabled = os.getenv("TOOL_USE_ENABLED", "FALSE").upper() == "TRUE"
+
 # For filtering local links
 REGEX_LOCAL_LINKS = (
     r"(?:^|\b)(127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|::1|[fF][cCdD]00::|\blocalhost\b)(?:$|\b)"
@@ -358,96 +360,7 @@ def split_message(msg, max_length=4000):
 
 def handle_text_generation(current_message, messages, channel_id, root_id):
     # Send the messages to the AI API
-    response = ai_client.beta.tools.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=get_system_instructions(),
-        messages=messages,
-        timeout=timeout,
-        temperature=temperature,
-        tools=tools,
-        tool_choice={"type": "auto"},  # Let model decide to call the function or not
-    )
-
-    initial_message_response = response.content
-
-    tool_messages = []
-
-    # Check if tool calls are present in the response
-    for index, call in enumerate((block for block in initial_message_response if block.type == "tool_use")):
-        if index >= 15:
-            raise Exception("Maximum amount of function calls reached")
-
-        if call.name == "get_stock_ticker_data":
-            arguments = call.input
-            data, is_error = wrapper_function_call(get_stock_ticker_data, arguments)
-            func_response = {
-                "type": "tool_result",
-                "tool_use_id": call.id,
-                "content": str(data),
-            }
-
-            if is_error:
-                func_response["is_error"] = True
-
-            tool_messages.append(func_response)
-        elif call.name == "get_cryptocurrency_data_by_market_cap":
-            arguments = call.input
-            data, is_error = wrapper_function_call(get_cryptocurrency_data_by_market_cap, arguments)
-            func_response = {
-                "type": "tool_result",
-                "tool_use_id": call.id,
-                "content": str(data),
-            }
-
-            if is_error:
-                func_response["is_error"] = True
-
-            tool_messages.append(func_response)
-        elif call.name == "get_cryptocurrency_data_by_id":
-            arguments = call.input
-            data, is_error = wrapper_function_call(get_cryptocurrency_data_by_id, arguments)
-            func_response = {
-                "type": "tool_result",
-                "tool_use_id": call.id,
-                "content": str(data),
-            }
-
-            if is_error:
-                func_response["is_error"] = True
-
-            tool_messages.append(func_response)
-        elif call.name == "get_exchange_rates":
-            arguments = call.input
-            data, is_error = wrapper_function_call(get_exchange_rates, arguments)
-            func_response = {
-                "type": "tool_result",
-                "tool_use_id": call.id,
-                "content": str(data),
-            }
-
-            if is_error:
-                func_response["is_error"] = True
-
-            tool_messages.append(func_response)
-        else:
-            func_response = {
-                "type": "tool_result",
-                "tool_use_id": call.id,
-                "content": "You hallucinated this function call, it does not exist",
-                "is_error": True,
-            }
-
-            tool_messages.append(func_response)
-
-    # Requery in case there are new messages from function calls
-    if tool_messages:
-        # Add the initial response to the messages array as it contains infos about tool calls
-        messages.append({"role": "assistant", "content": initial_message_response})
-
-        # Construct the final func_response using the accumulated result blocks
-        messages.append({"role": "user", "content": tool_messages})
-
+    if tool_use_enabled:
         response = ai_client.beta.tools.messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -456,8 +369,108 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             timeout=timeout,
             temperature=temperature,
             tools=tools,
-            tool_choice={"type": "auto"},  # Set to none if and when they support it
+            tool_choice={"type": "auto"},  # Let model decide to call the function or not
         )
+    else:
+        response = ai_client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=get_system_instructions(),
+            messages=messages,
+            timeout=timeout,
+            temperature=temperature,
+        )
+
+    initial_message_response = response.content
+
+    if tool_use_enabled:
+        tool_messages = []
+
+        # Check if tool calls are present in the response
+        for index, call in enumerate((block for block in initial_message_response if block.type == "tool_use")):
+            if index >= 15:
+                raise Exception("Maximum amount of function calls reached")
+
+            if call.name == "get_stock_ticker_data":
+                arguments = call.input
+                data, is_error = wrapper_function_call(get_stock_ticker_data, arguments)
+                func_response = {
+                    "type": "tool_result",
+                    "tool_use_id": call.id,
+                    "content": str(data),
+                }
+
+                if is_error:
+                    func_response["is_error"] = True
+
+                tool_messages.append(func_response)
+            elif call.name == "get_cryptocurrency_data_by_market_cap":
+                arguments = call.input
+                data, is_error = wrapper_function_call(get_cryptocurrency_data_by_market_cap, arguments)
+                func_response = {
+                    "type": "tool_result",
+                    "tool_use_id": call.id,
+                    "content": str(data),
+                }
+
+                if is_error:
+                    func_response["is_error"] = True
+
+                tool_messages.append(func_response)
+            elif call.name == "get_cryptocurrency_data_by_id":
+                arguments = call.input
+                data, is_error = wrapper_function_call(get_cryptocurrency_data_by_id, arguments)
+                func_response = {
+                    "type": "tool_result",
+                    "tool_use_id": call.id,
+                    "content": str(data),
+                }
+
+                if is_error:
+                    func_response["is_error"] = True
+
+                tool_messages.append(func_response)
+            elif call.name == "get_exchange_rates":
+                arguments = call.input
+                data, is_error = wrapper_function_call(get_exchange_rates, arguments)
+                func_response = {
+                    "type": "tool_result",
+                    "tool_use_id": call.id,
+                    "content": str(data),
+                }
+
+                if is_error:
+                    func_response["is_error"] = True
+
+                tool_messages.append(func_response)
+            else:
+                func_response = {
+                    "type": "tool_result",
+                    "tool_use_id": call.id,
+                    "content": "You hallucinated this function call, it does not exist",
+                    "is_error": True,
+                }
+
+                tool_messages.append(func_response)
+
+        # Requery in case there are new messages from function calls
+        if tool_messages:
+            # Add the initial response to the messages array as it contains infos about tool calls
+            messages.append({"role": "assistant", "content": initial_message_response})
+
+            # Construct the final func_response using the accumulated result blocks
+            messages.append({"role": "user", "content": tool_messages})
+
+            response = ai_client.beta.tools.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=get_system_instructions(),
+                messages=messages,
+                timeout=timeout,
+                temperature=temperature,
+                tools=tools,
+                tool_choice={"type": "auto"},  # Set to none if and when they support it
+            )
 
     text_block_exists = any(content_block.type == "text" for content_block in response.content)
 
