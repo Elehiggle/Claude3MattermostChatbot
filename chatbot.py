@@ -102,7 +102,7 @@ You are a helpful assistant used in a Mattermost chat. The current UTC time is {
 Whenever users asks you for help you will provide them with succinct answers formatted using Markdown. Do not unnecessarily greet people with their name, 
 do not be apologetic. 
 For tasks requiring reasoning or math, use the Chain-of-Thought methodology to explain your step-by-step calculations or logic before presenting your answer. 
-Objects sent to you are structured in JSON, which includes the message of the user, and might include file data, website data, and more. Do not reply in a JSON-object format. 
+Extra data is sent to you in a structured way, which might include file data, website data, and more, which is sent alongside the user message. 
 If a user sends a link, use the extracted URL content provided, do not assume or make up stories based on the URL alone. 
 If a user sends a YouTube link, primarily focus on the transcript and do not unnecessarily repeat the title, description or uploader of the video. 
 In your answer DO NOT contain the link to the video/website the user just provided to you as the user already knows it, unless the task requires it. 
@@ -384,7 +384,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(data),
+                "content": str(data),
             }
 
             if is_error:
@@ -397,7 +397,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(data),
+                "content": str(data),
             }
 
             if is_error:
@@ -410,7 +410,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(data),
+                "content": str(data),
             }
 
             if is_error:
@@ -423,7 +423,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             func_response = {
                 "type": "tool_result",
                 "tool_use_id": call.id,
-                "content": json.dumps(data),
+                "content": str(data),
             }
 
             if is_error:
@@ -638,15 +638,13 @@ def process_message(event_data):
 
                 # We don't want to extract information from links the assistant sent
                 if thread_role == "assistant":
-                    content["message"] = thread_message_text
-                    messages.append(construct_text_message(thread_sender_name, thread_role, content))
+                    messages.append(construct_text_message(thread_sender_name, thread_role, thread_message_text))
                     continue
 
                 # If keep content is disabled, we will skip the remaining code to grab content unless its the last message
                 is_last_message = index == len(thread_messages) - 1
                 if not keep_all_url_content and not is_last_message:
-                    content["message"] = thread_message_text
-                    messages.append(construct_text_message(thread_sender_name, thread_role, content))
+                    messages.append(construct_text_message(thread_sender_name, thread_role, thread_message_text))
                     continue
 
                 links = re.findall(r"(https?://\S+)", thread_message_text, re.IGNORECASE)  # Allow http and https links
@@ -679,18 +677,18 @@ def process_message(event_data):
                 if not content["website_data"]:
                     del content["website_data"]
 
-                content["message"] = thread_message_text
-
                 if image_messages:
-                    image_text_content = {
-                        "username": thread_sender_name,
-                        "message": content,
-                    }
+                    # Need to manually add username here as we do not use the construct function
+                    if content:
+                        content = f"{str(content)}{{'username': '{thread_sender_name}'}}{thread_message_text}"
+                    else:
+                        content = f"{{'username': '{thread_sender_name}'}}{thread_message_text}"
 
-                    image_messages.append({"type": "text", "text": json.dumps(image_text_content)})
-                    messages.append({"role": "user", "content": image_messages})
+                    image_messages.append({"type": "text", "text": content})
+                    messages.append({"role": thread_role, "content": image_messages})
                 else:
-                    messages.append(construct_text_message(thread_sender_name, "user", content))
+                    content = f"{str(content)}{thread_message_text}" if content else thread_message_text
+                    messages.append(construct_text_message(thread_sender_name, thread_role, content))
 
             # If the message is not part of a thread, reply to it to create a new thread
             handle_generation(current_message, messages, channel_id, post_id if not root_id else root_id)
@@ -734,14 +732,12 @@ def extract_post_data(post, event_data):
 
 
 def construct_text_message(name, role, message):
-    message["username"] = name
-
     return {
         "role": role,
         "content": [
             {
                 "type": "text",
-                "text": json.dumps(message),
+                "text": f"{{'username': '{name}'}}{str(message)}",
             }
         ],
     }
