@@ -666,7 +666,7 @@ async def raw_html_to_image(raw_html, url):
         finally:
             os.remove(temp_screen_path)
     finally:
-        browser.stop()
+        browser.stop()  # uc.util.deconstruct_browser() but may affect other instances running at the same time?
 
     return file_bytes
 
