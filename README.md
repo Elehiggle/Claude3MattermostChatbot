@@ -17,13 +17,15 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - **Responds to messages** mentioning "@chatbot" (or rather the chatbot's username) or direct messages
 - Extracts **images, PDFs and other files** from message attachments and from **URL links** in messages
 - Supports **FlareSolverr** to bypass Javascript/CAPTCHA restrictions
-- Supports the **Vision API** for describing images. Images from PDFs will also be sent here.
+- Supports the **Vision API** for describing images. Images from PDFs will also be sent here
 - **Gets transcripts of YouTube videos** for easy tl;dw summarizations. Title, description and uploader are also
   provided
-- Accesses additional live information via function calling (requires TOOL_USE_ENABLED="TRUE"). Currently supported: *
-  *stock data** (via Yahoo Finance, eg. ask about AAPL), **cryptocurrency data** (
+- Accesses additional live information via function calling (requires TOOL_USE_ENABLED="TRUE").
+  Currently supported: **stock data** (via Yahoo Finance, eg. ask about AAPL)
+  **cryptocurrency data** (
   via [Coingecko](https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=500&page=1&sparkline=false&price_change_percentage=24h%2C7d)),
   **fiat currency exchange rates** (via [ECB](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml))
+- Sends screenshots of rendered raw HTML code or from URLs (via function calling).
 - Maintains context of the conversation within a thread
 - Sends typing indicators to show that the chatbot is processing the message
 - Utilizes a thread pool to handle multiple requests concurrently (due to `mattermostdriver-asyncio` being outdated)
@@ -59,7 +61,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
     ```
    _or alternatively:_
     ```bash
-    python3 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF defusedxml yfinance pymupdf4llm
+    python3 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF defusedxml yfinance pymupdf4llm nodriver
     ```
 
 4. Set the following environment variables with your own values:
@@ -73,34 +75,35 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 | `MATTERMOST_USERNAME`  | Required if not using token. The username of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                                    |
 | `MATTERMOST_PASSWORD`  | Required if not using token. The password of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                                    |
 | `MATTERMOST_MFA_TOKEN` | The MFA token of the dedicated Mattermost user account for the chatbot (if using MFA)                                                                                                                    |
-| `TOOL_USE_ENABLED`     | Allows tool function calling for live data. It works but its IMO poorly implemented in the Anthropic API and messes with the output and has extra cost. Default: "FALSE"                                 |
+| `TOOL_USE_ENABLED`     | Allows tool function calling for live data and image generation. It works but its IMO poorly implemented in the Anthropic API and messes with the output and has extra cost. Default: "FALSE"            |
 
 ### Extended optional configuration variables:
 
-| Parameter                     | Description                                                                                                                                                                                                                                                                                    |
-|-------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `AI_SYSTEM_PROMPT`            | The system prompt/instructions. Default: [click](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/f709433ac05996992a7cb13a9c4a77472161772e/chatbot.py#L64) (Subject to change. current_time and CHATBOT_USERNAME variables inside the prompt will be auto-formatted and substituted. |
-| `AI_TIMEOUT`                  | The timeout for the AI API call in seconds. Default: "120"                                                                                                                                                                                                                                     |
-| `MAX_TOKENS`                  | The maximum number of tokens to generate in the response. Default: "4096" (max)                                                                                                                                                                                                                |
-| `TEMPERATURE`                 | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                                                                                                                                                        |
-| `MAX_RESPONSE_SIZE_MB`        | The maximum size of the website or file content to extract (in megabytes, per URL/file). Default: "100"                                                                                                                                                                                        |
-| `FLARESOLVERR_ENDPOINT`       | Endpoint URL to your [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) instance (eg. "<http://192.168.1.55:8191/v1>"). If you use this, MAX_RESPONSE_SIZE_MB won't be honored since it can't stream content. For most effectiveness, use a residential IP endpoint                  |
-| `KEEP_ALL_URL_CONTENT`        | Whether to feed the AI all URL content from the whole conversation thread. The website result is cached in memory. If you only want it to know about the current message's URL content (due to context size or cost), set to "FALSE". Default: "TRUE"                                          |
-| `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots that are not real bot accounts to prevent endless loops). Supports multiple, separated by comma                                                                                                                |
-| `MATTERMOST_PORT`             | The port of your Mattermost server. Default: "443"                                                                                                                                                                                                                                             |
-| `MATTERMOST_SCHEME`           | The scheme of the connection. Default: "https"                                                                                                                                                                                                                                                 |
-| `MATTERMOST_BASEPATH`         | The basepath of your Mattermost server. Default: "/api/v4"                                                                                                                                                                                                                                     |
-| `MATTERMOST_CERT_VERIFY`      | Cert verification. Default: True (also: string path to your certificate file)                                                                                                                                                                                                                  |
-| `AI_API_BASEURL`              | AI API Base URL. Default: None (which will use "<https://api.anthropic.com>"). Useful if you want to use a different AI with Anthropic compatible endpoint                                                                                                                                     |
-| `LOG_LEVEL`                   | The log level. Default: "INFO"                                                                                                                                                                                                                                                                 |
-| `LOG_LEVEL_ROOT`              | The root log level (for other modules than this chatbot). Default: "INFO"                                                                                                                                                                                                                      |
+| Parameter                     | Description                                                                                                                                                                                                                                                                                     |
+|-------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `AI_SYSTEM_PROMPT`            | The system prompt/instructions. Default: [click](https://github.com/Elehiggle/Claude3MattermostChatbot/blob/5d6d441a2c422a779371415ea91598f4e015e8ab/chatbot.py#L101) (Subject to change. current_time and CHATBOT_USERNAME variables inside the prompt will be auto-formatted and substituted. |
+| `AI_TIMEOUT`                  | The timeout for the AI API call in seconds. Default: "120"                                                                                                                                                                                                                                      |
+| `MAX_TOKENS`                  | The maximum number of tokens to generate in the response. Default: "4096" (max)                                                                                                                                                                                                                 |
+| `TEMPERATURE`                 | The temperature value for controlling the randomness of the generated responses (0.0 = analytical, 1.0 = fully random). Default: "0.15"                                                                                                                                                         |
+| `MAX_RESPONSE_SIZE_MB`        | The maximum size of the website or file content to extract (in megabytes, per URL/file). Default: "100"                                                                                                                                                                                         |
+| `FLARESOLVERR_ENDPOINT`       | Endpoint URL to your [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) instance (eg. "<http://192.168.1.55:8191/v1>"). If you use this, MAX_RESPONSE_SIZE_MB won't be honored since it can't stream content. For most effectiveness, use a residential IP endpoint                   |
+| `BROWSER_EXECUTABLE_PATH`     | Path to a chromium binary which is used for the raw_html_to_image function call capability. Fully optional. Chromium is auto installed on the docker image. Default: "/usr/bin/chromium"                                                                                                        |
+| `KEEP_ALL_URL_CONTENT`        | Whether to feed the AI all URL content from the whole conversation thread. The website result is cached in memory. If you only want it to know about the current message's URL content (due to context size or cost), set to "FALSE". Default: "TRUE"                                           |
+| `MATTERMOST_IGNORE_SENDER_ID` | The user ID of a user to ignore (optional, useful if you have multiple chatbots that are not real bot accounts to prevent endless loops). Supports multiple, separated by comma                                                                                                                 |
+| `MATTERMOST_PORT`             | The port of your Mattermost server. Default: "443"                                                                                                                                                                                                                                              |
+| `MATTERMOST_SCHEME`           | The scheme of the connection. Default: "https"                                                                                                                                                                                                                                                  |
+| `MATTERMOST_BASEPATH`         | The basepath of your Mattermost server. Default: "/api/v4"                                                                                                                                                                                                                                      |
+| `MATTERMOST_CERT_VERIFY`      | Cert verification. Default: True (also: string path to your certificate file)                                                                                                                                                                                                                   |
+| `AI_API_BASEURL`              | AI API Base URL. Default: None (which will use "<https://api.anthropic.com>"). Useful if you want to use a different AI with Anthropic compatible endpoint                                                                                                                                      |
+| `LOG_LEVEL`                   | The log level. Default: "INFO"                                                                                                                                                                                                                                                                  |
+| `LOG_LEVEL_ROOT`              | The root log level (for other modules than this chatbot). Default: "INFO"                                                                                                                                                                                                                       |
 
 ## Usage
 
 Run the script:
 
 ```bash
-python3.12 chatbot.py
+python3 chatbot.py
 ```
 
 The chatbot will connect to the Mattermost server and start listening for messages.
