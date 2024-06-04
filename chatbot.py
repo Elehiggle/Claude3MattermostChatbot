@@ -17,9 +17,7 @@ from io import BytesIO
 from defusedxml import ElementTree
 import yfinance
 import certifi
-
-# noinspection PyPackageRequirements
-import fitz
+import pymupdf
 import pymupdf4llm
 import httpx
 from PIL import Image
@@ -116,7 +114,7 @@ Do not wrap your answers in XML tags or JSON format.""",
 tools = [
     {
         "name": "raw_html_to_image",
-        "description": "Generates an image from raw HTML code. You can also pass a URL which will be screenshotted, but only do that if its specifically requested.",
+        "description": "Generates an image from raw HTML code. You can also pass a URL which will be screenshotted, but only do that if a screenshot is specifically requested.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -1013,7 +1011,7 @@ def extract_pdf_content(stream):
     pdf_text_content = ""
     image_messages = []
 
-    with fitz.open(None, stream, "pdf") as pdf:
+    with pymupdf.open(None, stream, "pdf") as pdf:
         pdf_text_content += pymupdf4llm.to_markdown(pdf).strip()
 
         for page in pdf:
