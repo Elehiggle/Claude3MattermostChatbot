@@ -1,13 +1,13 @@
 mattermostdriver>=7.3.2
-certifi>=2024.2.2
+certifi>=2024.6.2
 beautifulsoup4>=4.12.3
 pillow>=10.3.0
 httpx>=0.27.0
 youtube-transcript-api>=0.6.2
 yt-dlp>=2024.4.9
-anthropic>=0.26.1
-PyMuPDF>=1.24.4
+PyMuPDF>=1.24.5
 yfinance>=0.2.40
-pymupdf4llm>=0.0.3
+pymupdf4llm>=0.0.5
 defusedxml>=0.7.1
 nodriver>=0.29rc2
+anthropic>=0.28.0
