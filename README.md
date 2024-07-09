@@ -69,7 +69,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 | Parameter              | Description                                                                                                                                                                                              |
 |------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `AI_API_KEY`           | Required. Your Anthropic API key                                                                                                                                                                         |
-| `AI_MODEL`             | The Anthropic model to use. Default: "claude-3-opus-20240229"                                                                                                                                            |
+| `AI_MODEL`             | The Anthropic model to use. Default: "claude-3-5-sonnet-20240620"                                                                                                                                        |
 | `MATTERMOST_URL`       | Required. The URL of your Mattermost server                                                                                                                                                              |
 | `MATTERMOST_TOKEN`     | Required if not using user/password. The bot token (alternatively personal access token) with relevant permissions created specifically for the chatbot. Don't forget to add the bot account to the team |
 | `MATTERMOST_USERNAME`  | Required if not using token. The username of the dedicated Mattermost user account for the chatbot (if using username/password login)                                                                    |
@@ -121,7 +121,7 @@ You can also run the chatbot using Docker. Use the following command to run the 
 ```bash
 docker run -d --name chatbotclaude \
   -e AI_API_KEY="your_ai_api_key" \
-  -e AI_MODEL="claude-3-opus-20240229" \
+  -e AI_MODEL="claude-3-5-sonnet-20240620" \
   -e MATTERMOST_URL="mattermostinstance.example.com" \
   -e MATTERMOST_TOKEN="your_mattermost_token" \
   -e MAX_TOKENS="4096" \

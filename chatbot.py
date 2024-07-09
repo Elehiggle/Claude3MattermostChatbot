@@ -91,7 +91,7 @@ def timed_lru_cache(_func=None, *, seconds: int = 600, maxsize: int = 128, typed
 
 # AI parameters
 api_key = os.environ["AI_API_KEY"]
-model = os.getenv("AI_MODEL", "claude-3-opus-20240229")
+model = os.getenv("AI_MODEL", "claude-3-5-sonnet-20240620")
 ai_api_baseurl = os.getenv("AI_API_BASEURL", None)
 timeout = int(os.getenv("AI_TIMEOUT", "120"))
 max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
