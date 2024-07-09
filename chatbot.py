@@ -39,7 +39,7 @@ logger.setLevel(log_level)
 tools = [
     {
         "name": "raw_html_to_image",
-        "description": "Generates an image from raw HTML code. You can also pass a URL which will be screenshotted, but only do that if a screenshot is specifically requested.",
+        "description": "Generates an image from raw HTML code. You can also pass a URL which will be screenshotted, but only do that if a screenshot is specifically requested (e.g. the user says screenshot this).",
         "input_schema": {
             "type": "object",
             "properties": {
