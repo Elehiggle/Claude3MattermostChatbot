@@ -61,6 +61,12 @@ keep_all_url_content = os.getenv("KEEP_ALL_URL_CONTENT", "TRUE").upper() == "TRU
 
 tool_use_enabled = os.getenv("TOOL_USE_ENABLED", "FALSE").upper() == "TRUE"
 
+compatible_emoji_image_content_types = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+]
+
 compatible_image_content_types = [
     "image/jpeg",
     "image/png",
@@ -72,4 +78,7 @@ mattermost_max_image_dimensions = (
     7680,
     4320,
 )  # https://docs.mattermost.com/collaborate/share-files-in-messages.html#attachment-limits-and-sizes
+
+mattermost_max_emoji_image_dimensions = (128, 128)
+
 ai_model_max_vision_image_dimensions = (1568, 1568)  # https://docs.anthropic.com/en/docs/vision#image-size

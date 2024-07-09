@@ -20,6 +20,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - Supports the **Vision API** for describing images. Images from PDFs will also be sent here
 - **Gets transcripts of YouTube videos** for easy tl;dw summarizations. Title, description and uploader are also
   provided
+- Ability to create custom emoji from image URLs, optionally with removing the background
 - Accesses additional live information via function calling (requires TOOL_USE_ENABLED="TRUE").
   Currently supported: **stock data** (via Yahoo Finance, eg. ask about AAPL)
   **cryptocurrency data** (
@@ -61,7 +62,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
     ```
    _or alternatively:_
     ```bash
-    python3 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF defusedxml yfinance pymupdf4llm nodriver validators
+    python3 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF defusedxml yfinance pymupdf4llm nodriver validators rembg
     ```
 
 4. Set the following environment variables with your own values:
@@ -128,6 +129,13 @@ docker run -d --name chatbotclaude \
   -e TEMPERATURE="0.15" \
   ghcr.io/elehiggle/claude3mattermostchatbot:latest
 ```
+
+### Using Custom emoji generation
+
+![Mattermost Custom emoji bot example](./custom_emoji_demo.png)
+
+The bot will take an image URL, optionally remove the background, and create a custom emoji on the Mattermost server
+with a provided or generated name.
 
 ## How does this bot differ from the official Mattermost AI plugin?
 
