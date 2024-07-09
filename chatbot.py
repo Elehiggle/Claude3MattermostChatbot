@@ -505,9 +505,6 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
     # Remove Chain-of-Thought XML tags added by the model due to tools usage, pray they change this one day
     response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL).strip()
 
-    # Failsafe in case the response contains the username in object format
-    response_text = re.sub(rf"{{'username': '@?{CHATBOT_USERNAME}'}}", "", response_text, flags=re.DOTALL).strip()
-
     # Split the response into multiple messages if necessary
     response_parts = split_message(response_text)
 
@@ -745,11 +742,7 @@ def process_message(event_data):
 
                 # We use str() and not JSON.dumps() to avoid the AI replying in (partially) escaped JSON format
                 if image_messages:
-                    # Need to manually add username here as we do not use the construct function
-                    if content:
-                        content = f"{str(content)}{{'username': '{thread_sender_name}'}}{thread_message_text}"
-                    else:
-                        content = f"{{'username': '{thread_sender_name}'}}{thread_message_text}"
+                    content = f"{str(content)}{thread_message_text}" if content else thread_message_text  # {{'username': '{thread_sender_name}'}}
 
                     image_messages.append({"type": "text", "text": content})
                     # We force a user role here, as this is an API requirement for images for Anthropic AIs
@@ -809,7 +802,7 @@ def construct_text_message(name, role, message):
         "content": [
             {
                 "type": "text",
-                "text": f"{{'username': '{name}'}}{str(message)}",
+                "text": f"{str(message)}",  # {{'username': '{name}'}}
             }
         ],
     }
