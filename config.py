@@ -25,15 +25,19 @@ system_prompt_unformatted = os.getenv(
     "AI_SYSTEM_PROMPT",
     """
 You are a helpful assistant used in a Mattermost chat. The current UTC time is {current_time}. 
-Whenever users asks you for help you will provide them with succinct answers formatted using Markdown. Do not unnecessarily greet people with their name, 
-do not be apologetic. 
+Whenever users asks you for help you will provide them with succinct answers formatted using Markdown. Do not be apologetic. 
 For tasks requiring reasoning or math, use the Chain-of-Thought methodology to explain your step-by-step calculations or logic before presenting your answer. 
 Extra data is sent to you in a structured way, which might include file data, website data, and more, which is sent alongside the user message. 
 If a user sends a link, use the extracted URL content provided, do not assume or make up stories based on the URL alone. 
 If a user sends a YouTube link, primarily focus on the transcript and do not unnecessarily repeat the title, description or uploader of the video. 
 In your answer DO NOT contain the link to the video/website the user just provided to you as the user already knows it, unless the task requires it. 
 If your response contains any URLs, make sure to properly escape them using Markdown syntax for display purposes.
-Do not wrap your answers in XML tags or JSON format.""",
+Do not wrap your answers in XML tags or JSON format. 
+If your response contains any URLs, make sure to properly escape them using Markdown syntax for display purposes.
+For creating custom emojis: Only create a custom emoji if the user explicitly requests it. 
+Do not proceed with creating a custom emoji if no valid URL to an image is provided by the user. 
+Do not make assumptions based on emoji usage alone; look for clear instructions from the user. 
+For the raw_html_to_image function: Only use it if the user explicitly requests a screenshot of a website.""",
 )
 
 # Mattermost server details
@@ -41,7 +45,15 @@ mattermost_url = os.environ["MATTERMOST_URL"]
 mattermost_scheme = os.getenv("MATTERMOST_SCHEME", "https")
 mattermost_port = int(os.getenv("MATTERMOST_PORT", "443"))
 mattermost_basepath = os.getenv("MATTERMOST_BASEPATH", "/api/v4")
-mattermost_cert_verify = os.getenv("MATTERMOST_CERT_VERIFY", True)  # pylint: disable=invalid-envvar-default
+
+MATTERMOST_CERT_VERIFY = os.getenv("MATTERMOST_CERT_VERIFY", "TRUE")
+
+# Handle the situation where a string path to a cert file might be handed over
+if MATTERMOST_CERT_VERIFY == "TRUE":
+    MATTERMOST_CERT_VERIFY = True
+if MATTERMOST_CERT_VERIFY == "FALSE":
+    MATTERMOST_CERT_VERIFY = False
+
 mattermost_token = os.getenv("MATTERMOST_TOKEN", "")
 mattermost_ignore_sender_id = os.getenv("MATTERMOST_IGNORE_SENDER_ID", "").split(",")
 mattermost_username = os.getenv("MATTERMOST_USERNAME", "")
@@ -60,6 +72,8 @@ max_response_size = 1024 * 1024 * int(os.getenv("MAX_RESPONSE_SIZE_MB", "100"))
 keep_all_url_content = os.getenv("KEEP_ALL_URL_CONTENT", "TRUE").upper() == "TRUE"
 
 tool_use_enabled = os.getenv("TOOL_USE_ENABLED", "FALSE").upper() == "TRUE"
+
+disable_specific_tool_calls = os.getenv("DISABLE_SPECIFIC_TOOL_CALLS", "").lower().split(",")
 
 compatible_emoji_image_content_types = [
     "image/jpeg",
@@ -80,5 +94,6 @@ mattermost_max_image_dimensions = (
 )  # https://docs.mattermost.com/collaborate/share-files-in-messages.html#attachment-limits-and-sizes
 
 mattermost_max_emoji_image_dimensions = (128, 128)
+MATTERMOST_MAX_EMOJI_IMAGE_FILE_SIZE = 0.524287  # technically 0.524288 / 512 KiB
 
 ai_model_max_vision_image_dimensions = (1568, 1568)  # https://docs.anthropic.com/en/docs/vision#image-size
