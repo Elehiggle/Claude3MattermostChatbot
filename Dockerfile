@@ -2,7 +2,7 @@ FROM python:3.12.4-slim
 
 WORKDIR /app
 
-COPY ..
+COPY . .
 
 # Install Chromium. Those are public API keys that even Debian uses.
 RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections && \
