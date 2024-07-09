@@ -61,7 +61,7 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
     ```
    _or alternatively:_
     ```bash
-    python3 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF defusedxml yfinance pymupdf4llm nodriver
+    python3 -m pip install anthropic mattermostdriver certifi beautifulsoup4 pillow httpx youtube-transcript-api yt-dlp PyMuPDF defusedxml yfinance pymupdf4llm nodriver validators
     ```
 
 4. Set the following environment variables with your own values:
