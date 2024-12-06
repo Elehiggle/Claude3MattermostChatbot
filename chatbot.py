@@ -719,6 +719,10 @@ def process_message(event_data):
 
                 thread_post, thread_sender_name, thread_role, thread_message_text = thread_message
 
+                # If message is empty, keep a space for Anthropic API compliance
+                if not thread_message_text:
+                    thread_message_text = " "
+
                 image_messages = []
 
                 links = re.findall(r"(https?://\S+)", thread_message_text, re.IGNORECASE)  # Allow http and https links
@@ -807,6 +811,11 @@ def should_ignore_post(post):
 def extract_post_data(post, event_data):
     # Remove the "@chatbot" mention from the message
     message = post["message"].replace(CHATBOT_USERNAME_AT, "").strip()
+
+    # If message is empty, keep a space for Anthropic API compliance
+    if not message:
+        message = " "
+
     channel_id = post["channel_id"]
     sender_name = sanitize_username(event_data["data"]["sender_name"])
     root_id = post["root_id"]
