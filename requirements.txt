@@ -34,7 +34,7 @@ networkx<=3.3
 nodriver==0.29rc2  # Pin version <= 0.36 to avoid breaking changes with headless mode, and maybe 0.29rc2 to avoid blocking code that interrupts websockets?
 numba<=0.60.0
 numpy<=2.0.2
-onnxruntime<=1.19.2
+onnxruntime<=1.20.1
 opencv-python-headless<=4.10.0.84
 packaging<=24.1
 pandas<=2.2.3
