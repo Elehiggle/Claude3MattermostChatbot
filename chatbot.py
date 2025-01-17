@@ -152,9 +152,8 @@ ai_client = Anthropic(api_key=api_key, base_url=ai_api_baseurl)
 thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
 
-def get_system_instructions():
-    current_time = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    return system_prompt_unformatted.format(current_time=current_time, CHATBOT_USERNAME=CHATBOT_USERNAME)
+def get_system_instructions(initial_time):
+    return system_prompt_unformatted.format(current_time=initial_time, CHATBOT_USERNAME=CHATBOT_USERNAME)
 
 
 @lru_cache(maxsize=1000)
@@ -444,14 +443,16 @@ def process_tool_calls(tool_calls, current_message, channel_id, root_id):
     return tool_messages
 
 
-def handle_text_generation(current_message, messages, channel_id, root_id):
+def handle_text_generation(current_message, messages, channel_id, root_id, initial_time):
     start_time = time.time()
+
+    system_instructions = get_system_instructions(initial_time)
 
     # Send the messages to the AI API
     response = ai_client.messages.create(
         model=model,
         max_tokens=max_tokens,
-        system=get_system_instructions(),
+        system=system_instructions,
         messages=messages,
         timeout=timeout,
         temperature=temperature,
@@ -502,7 +503,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
             response = ai_client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=get_system_instructions(),
+                system=system_instructions,
                 messages=messages,
                 timeout=timeout,
                 temperature=temperature,
@@ -533,13 +534,13 @@ def handle_text_generation(current_message, messages, channel_id, root_id):
         driver.posts.create_post({"channel_id": channel_id, "message": part, "root_id": root_id})
 
 
-def handle_generation(current_message, messages, channel_id, root_id):
+def handle_generation(current_message, messages, channel_id, root_id, initial_time):
     try:
         logger.info("Querying AI API")
 
         messages = ensure_compliant_messages(messages)
 
-        handle_text_generation(current_message, messages, channel_id, root_id)
+        handle_text_generation(current_message, messages, channel_id, root_id, initial_time)
     except Exception as e:
         logger.error(f"Text generation error: {str(e)} {traceback.format_exc()}")
         driver.posts.create_post(
@@ -711,10 +712,17 @@ def process_message(event_data):
 
             if root_id:
                 thread_messages = get_thread_posts(root_id, post_id)
-
-            # If we don't have any thread, add our own message to the array
-            if not root_id:
+                root_post = driver.posts.get_post(root_id)
+                posted_at = root_post["create_at"]
+            else:
+                # If we don't have any thread, add our own message to the array
                 thread_messages.append((post, sender_name, "user", current_message))
+                posted_at = post["create_at"]
+
+            current_time_utc = datetime.datetime.now(datetime.UTC)
+            post_time_utc = datetime.datetime.fromtimestamp(posted_at / 1000.0, tz=datetime.UTC)
+            initial_time = min(current_time_utc, post_time_utc).strftime("%Y-%m-%d %H:%M:%S.%f")[
+                           :-3]  # Gets the UTC time of the root post
 
             for index, thread_message in enumerate(thread_messages):
                 content = {}
@@ -775,7 +783,7 @@ def process_message(event_data):
                     messages.append(construct_text_message(thread_sender_name, thread_role, content))
 
             # If the message is not part of a thread, reply to it to create a new thread
-            handle_generation(current_message, messages, channel_id, post_id if not root_id else root_id)
+            handle_generation(current_message, messages, channel_id, post_id if not root_id else root_id, initial_time)
     except Exception as e:
         logger.error(f"Error processing message: {str(e)} {traceback.format_exc()}")
         if chatbot_invoked:
@@ -1250,7 +1258,9 @@ def main():
             for disable_tool in disable_specific_tool_calls:
                 tools = [tool for tool in tools if tool["name"] != disable_tool]
 
-        logger.debug(f"SYSTEM PROMPT: {get_system_instructions()}")
+        system_instructions = get_system_instructions(
+            datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])
+        logger.debug(f"SYSTEM PROMPT: {system_instructions}")
 
         while True:
             try:
