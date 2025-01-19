@@ -799,8 +799,6 @@ def process_message(event_data):
             # Add cache_control to the last message in the list
             messages[-1]["content"][-1]["cache_control"] = {"type": "ephemeral"}
 
-            print(messages)
-
             # If the message is not part of a thread, reply to it to create a new thread
             handle_generation(current_message, messages, channel_id, post_id if not root_id else root_id, initial_time)
     except Exception as e:

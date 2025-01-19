@@ -31,6 +31,9 @@ This project is a chatbot for Mattermost that integrates with the Anthropic API 
 - Sends typing indicators to show that the chatbot is processing the message
 - Utilizes a thread pool to handle multiple requests concurrently (due to `mattermostdriver-asyncio` being outdated)
 - Offers **Docker support** for easy deployment
+- Supports rudimentary caching. Anthropic charges for written cache, so if your environment simply says "hi" often
+  without any meaningful conversations, you
+  might have increased costs. Hit me up if you need an option to disable caching.
 
 ## Prerequisites
 
