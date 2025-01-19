@@ -156,6 +156,16 @@ def get_system_instructions(initial_time):
     return system_prompt_unformatted.format(current_time=initial_time, CHATBOT_USERNAME=CHATBOT_USERNAME)
 
 
+def construct_system_message(initial_time):
+    return [
+        {
+            "type": "text",
+            "text": get_system_instructions(initial_time),
+            "cache_control": {"type": "ephemeral"}
+        }
+    ]
+
+
 @lru_cache(maxsize=1000)
 def get_username_from_user_id(user_id):
     try:
@@ -446,7 +456,7 @@ def process_tool_calls(tool_calls, current_message, channel_id, root_id):
 def handle_text_generation(current_message, messages, channel_id, root_id, initial_time):
     start_time = time.time()
 
-    system_instructions = get_system_instructions(initial_time)
+    system_instructions = construct_system_message(initial_time)
 
     # Send the messages to the AI API
     response = ai_client.messages.create(
@@ -464,6 +474,8 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
     duration = end_time - start_time
 
     logger.debug(f"AI API response received after {duration:.2f} seconds")
+    logger.debug(
+        f"Cache usage: {response.usage.cache_read_input_tokens} read, {response.usage.cache_creation_input_tokens} write, {response.usage.input_tokens} normal")
 
     initial_message_response = response.content
 
@@ -716,7 +728,9 @@ def process_message(event_data):
                 posted_at = root_post["create_at"]
             else:
                 # If we don't have any thread, add our own message to the array
-                thread_messages.append((post, sender_name, "user", current_message))
+                # If message contains only whitespace, keep an empty hidden space for Anthropic API compliance
+                thread_messages.append(
+                    (post, sender_name, "user", current_message if not current_message.isspace() else "‎"))
                 posted_at = post["create_at"]
 
             current_time_utc = datetime.datetime.now(datetime.UTC)
@@ -729,9 +743,9 @@ def process_message(event_data):
 
                 thread_post, thread_sender_name, thread_role, thread_message_text = thread_message
 
-                # If message is empty, keep a space for Anthropic API compliance
-                if not thread_message_text:
-                    thread_message_text = " "
+                # If message contains only whitespace, keep an empty hidden space for Anthropic API compliance
+                if not thread_message_text or thread_message_text.isspace():
+                    thread_message_text = "‎"
 
                 image_messages = []
 
@@ -781,6 +795,11 @@ def process_message(event_data):
                 else:
                     content = f"{str(content)}{thread_message_text}" if content else thread_message_text
                     messages.append(construct_text_message(thread_sender_name, thread_role, content))
+
+            # Add cache_control to the last message in the list
+            messages[-1]["content"][-1]["cache_control"] = {"type": "ephemeral"}
+
+            print(messages)
 
             # If the message is not part of a thread, reply to it to create a new thread
             handle_generation(current_message, messages, channel_id, post_id if not root_id else root_id, initial_time)
@@ -1257,6 +1276,10 @@ def main():
             logger.info(f"Disabling tools: {disable_specific_tool_calls}")
             for disable_tool in disable_specific_tool_calls:
                 tools = [tool for tool in tools if tool["name"] != disable_tool]
+
+        # Add cache_control to the last tool in the list
+        if tools:
+            tools[-1]["cache_control"] = {"type": "ephemeral"}
 
         system_instructions = get_system_instructions(
             datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3])

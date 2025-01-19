@@ -16,7 +16,7 @@ os.environ["SSL_CERT_FILE"] = certifi.where()
 
 # AI parameters
 api_key = os.environ["AI_API_KEY"]
-model = os.getenv("AI_MODEL", "claude-3-5-sonnet-20240620")
+model = os.getenv("AI_MODEL", "claude-3-5-sonnet-latest")
 ai_api_baseurl = os.getenv("AI_API_BASEURL", None)
 timeout = int(os.getenv("AI_TIMEOUT", "120"))
 max_tokens = int(os.getenv("MAX_TOKENS", "4096"))
