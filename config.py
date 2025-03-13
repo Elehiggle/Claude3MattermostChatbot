@@ -105,3 +105,5 @@ ai_model_max_vision_image_dimensions = (1568, 1568)  # https://docs.anthropic.co
 # Thinking feature settings
 thinking_enabled = os.getenv("THINKING_ENABLED", "FALSE").upper() == "TRUE"
 thinking_budget_tokens = int(os.getenv("THINKING_BUDGET_TOKENS", "16000"))
+# Whether to display thinking blocks to users in the chat
+thinking_display_enabled = os.getenv("THINKING_DISPLAY_ENABLED", "FALSE").upper() == "TRUE"

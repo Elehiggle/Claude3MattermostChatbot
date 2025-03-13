@@ -511,6 +511,8 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
             logger.debug("Requerying AI API after tool calls")
 
             # Add the initial response to the messages array as it contains infos about tool calls
+            # When using thinking, we need to preserve the original response including thinking blocks
+            # This is critical for maintaining the model's reasoning flow during tool use
             messages.append({"role": "assistant", "content": initial_message_response})
 
             # Construct the final func_response using the accumulated result blocks
@@ -533,14 +535,32 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
     if not text_block_exists:
         raise Exception("Empty AI response, likely API error or mishandling")
 
+    # Process thinking blocks if present and display is enabled
+    thinking_blocks = []
+    for content_block in response.content:
+        if content_block.type == "thinking" and thinking_display_enabled:
+            thinking_blocks.append(f"**Claude's thinking process:**\n\n```\n{content_block.thinking}\n```\n")
+        elif content_block.type == "redacted_thinking" and thinking_display_enabled:
+            thinking_blocks.append("**Note:** Some of Claude's internal reasoning has been automatically encrypted for safety reasons. This doesn't affect the quality of responses.\n")
+
+    # Display thinking blocks if any and display is enabled
+    if thinking_blocks and thinking_display_enabled:
+        thinking_text = "\n".join(thinking_blocks)
+        driver.posts.create_post({"channel_id": channel_id, "message": thinking_text, "root_id": root_id})
+
     response_text = ""
 
     for content_block in response.content:
         if content_block.type == "text":
             response_text += content_block.text
 
-    # Remove Chain-of-Thought XML tags added by the model due to tools usage, pray they change this one day
-    response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL).strip()
+    # When using thinking feature, the model should not add XML thinking tags
+    # Only remove XML thinking tags if not using the thinking feature
+    if not is_thinking_enabled:
+        # Remove Chain-of-Thought XML tags added by the model due to tools usage, pray they change this one day
+        response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL).strip()
+    else:
+        response_text = response_text.strip()
 
     # Split the response into multiple messages if necessary
     response_parts = split_message(response_text)
