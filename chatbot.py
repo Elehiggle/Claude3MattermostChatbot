@@ -458,6 +458,9 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
 
     system_instructions = construct_system_message(initial_time)
 
+    # Check if thinking is enabled and we're using Claude 3.7
+    is_thinking_enabled = thinking_enabled and "claude-3-7" in model
+    
     # Send the messages to the AI API
     response = ai_client.messages.create(
         model=model,
@@ -465,10 +468,10 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
         system=system_instructions,
         messages=messages,
         timeout=timeout,
-        temperature=temperature,
+        temperature=NOT_GIVEN if is_thinking_enabled else temperature,  # Disable temperature when thinking is enabled
         tools=tools if tool_use_enabled else NOT_GIVEN,
         tool_choice={"type": "auto"} if tool_use_enabled else NOT_GIVEN,  # Let model decide to call the function or not
-        thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens} if thinking_enabled and "claude-3-7" in model else NOT_GIVEN,
+        thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens} if is_thinking_enabled else NOT_GIVEN,
     )
 
     end_time = time.time()
@@ -519,10 +522,10 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
                 system=system_instructions,
                 messages=messages,
                 timeout=timeout,
-                temperature=temperature,
+                temperature=NOT_GIVEN if is_thinking_enabled else temperature,  # Disable temperature when thinking is enabled
                 tools=tools,
                 tool_choice={"type": "auto"},  # Set to none if and when they support it
-                thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens} if thinking_enabled and "claude-3-7" in model else NOT_GIVEN,
+                thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens} if is_thinking_enabled else NOT_GIVEN,
             )
 
     text_block_exists = any(content_block.type == "text" for content_block in response.content)
