@@ -468,6 +468,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
         temperature=temperature,
         tools=tools if tool_use_enabled else NOT_GIVEN,
         tool_choice={"type": "auto"} if tool_use_enabled else NOT_GIVEN,  # Let model decide to call the function or not
+        thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens} if thinking_enabled and "claude-3-7" in model else NOT_GIVEN,
     )
 
     end_time = time.time()
@@ -521,6 +522,7 @@ def handle_text_generation(current_message, messages, channel_id, root_id, initi
                 temperature=temperature,
                 tools=tools,
                 tool_choice={"type": "auto"},  # Set to none if and when they support it
+                thinking={"type": "enabled", "budget_tokens": thinking_budget_tokens} if thinking_enabled and "claude-3-7" in model else NOT_GIVEN,
             )
 
     text_block_exists = any(content_block.type == "text" for content_block in response.content)

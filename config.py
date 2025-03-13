@@ -101,3 +101,7 @@ mattermost_max_emoji_image_dimensions = (128, 128)
 MATTERMOST_MAX_EMOJI_IMAGE_FILE_SIZE = 0.524287  # technically 0.524288 / 512 KiB
 
 ai_model_max_vision_image_dimensions = (1568, 1568)  # https://docs.anthropic.com/en/docs/vision#image-size
+
+# Thinking feature settings
+thinking_enabled = os.getenv("THINKING_ENABLED", "FALSE").upper() == "TRUE"
+thinking_budget_tokens = int(os.getenv("THINKING_BUDGET_TOKENS", "16000"))
